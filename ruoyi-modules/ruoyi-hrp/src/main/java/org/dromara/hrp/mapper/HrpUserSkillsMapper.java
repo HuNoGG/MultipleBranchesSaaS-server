@@ -17,6 +17,6 @@ import java.util.List;
  */
 public interface HrpUserSkillsMapper extends BaseMapperPlus<HrpUserSkills, HrpUserSkillsVo> {
 
-    @Select("select * from hrp_user_skills where user_id in (#{userIds}) ")
+
     List<HrpUserSkillsVo> selectVoListByUserIds(@Param("userIds") List<Long> userIds);
 }

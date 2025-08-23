@@ -4,4 +4,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.hrp.mapper.HrpLeaveRequestsMapper">
 
+    <select id="selectVoListByUsersAndDate" resultType="org.dromara.hrp.domain.vo.HrpLeaveRequestsVo">
+        select lr.*, u.nick_name as user_name
+        from hrp_leave_requests lr
+        left join sys_user u on lr.user_id = u.user_id
+        where lr.user_id in
+        <foreach collection="userIds" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+          and lr.leave_date between #{startDate} and #{endDate}
+    </select>
 </mapper>

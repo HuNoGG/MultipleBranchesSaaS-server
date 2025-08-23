@@ -1,5 +1,6 @@
 package org.dromara.hrp.domain.vo;
 
+import java.time.LocalDate;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.dromara.hrp.domain.HrpShifts;
@@ -89,6 +90,25 @@ public class HrpShiftsVo implements Serializable {
      */
     @ExcelProperty(value = "备注")
     private String remark;
+
+
+    /**
+     * 新增方法：计算班次时长（小时）
+     * @return double 班次的小时数
+
+     */
+    public double getDurationInHours() {
+        if (startTime == null || endTime == null) {
+            return 0.0;
+        }
+        long durationMillis = endTime.getTime() - startTime.getTime();
+        // 如果是跨天班次，需要加上24小时的毫秒数
+        if (Boolean.TRUE.equals(isCrossDay)) {
+            durationMillis += 24 * 60 * 60 * 1000;
+        }
+        return durationMillis / (1000.0 * 60 * 60);
+    }
+
 
 
 }

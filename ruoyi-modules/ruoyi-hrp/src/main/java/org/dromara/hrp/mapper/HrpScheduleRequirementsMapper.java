@@ -17,7 +17,6 @@ import java.util.List;
 public interface HrpScheduleRequirementsMapper extends BaseMapperPlus<HrpScheduleRequirements, HrpScheduleRequirementsVo> {
 
 
-    @Select("select * from hrp_schedule_requirements where store_id in (#{storeId})")
     List<HrpScheduleRequirementsVo> selectVoListByStoreId(@Param("storeId") Long storeId);
 
 

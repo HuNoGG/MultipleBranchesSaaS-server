@@ -65,4 +65,6 @@ public interface IHrpUserProfileService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    List<HrpUserProfileVo> queryListWithSkillsByStoreId(Long storeId);
 }

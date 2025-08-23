@@ -36,6 +36,18 @@ public class HrpUserProfileController extends BaseController {
 
     private final IHrpUserProfileService hrpUserProfileService;
 
+
+    /**
+     * 获取指定分店的员工列表及其技能
+     * @param storeId 分店ID
+     */
+    @GetMapping("/listWithSkills")
+    public R<List<HrpUserProfileVo>> listWithSkills(@RequestParam Long storeId) {
+        List<HrpUserProfileVo> list = hrpUserProfileService.queryListWithSkillsByStoreId(storeId);
+        return R.ok(list);
+    }
+
+
     /**
      * 查询员工档案扩展列表
      */

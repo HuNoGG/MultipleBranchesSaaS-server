@@ -1,5 +1,6 @@
 package org.dromara.hrp.domain.vo;
 
+import java.time.LocalDate;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.dromara.hrp.domain.HrpStoreEvents;
@@ -46,7 +47,7 @@ public class HrpStoreEventsVo implements Serializable {
      * 事件日期
      */
     @ExcelProperty(value = "事件日期")
-    private Date eventDate;
+    private LocalDate eventDate;
 
     /**
      * 事件类型(字典: 全天放假, 上午放假, 下午放假)

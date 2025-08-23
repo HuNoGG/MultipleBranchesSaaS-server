@@ -17,7 +17,12 @@ import java.util.List;
 public interface HrpUserAvailabilityMapper extends BaseMapperPlus<HrpUserAvailability, HrpUserAvailabilityVo> {
 
 
-    @Select("select * from hrp_user_availability where user_id in (#{userIds})")
+    /**
+     * 查询员工可上班时段列表
+     *
+     * @param userIds 用户ID列表
+     * @return 员工可上班时段列表
+     */
     List<HrpUserAvailabilityVo> selectVoListByUserIds(@Param("userIds") List<Long> userIds);
 
 }

@@ -18,7 +18,6 @@ import java.util.List;
 public interface HrpLeaveRequestsMapper extends BaseMapperPlus<HrpLeaveRequests, HrpLeaveRequestsVo> {
 
 
-    @Select("select * from hrp_leave_requests where user_id in (#{userIds}) and leave_date >= #{startDate} and leave_date <= #{endDate} ")
     List<HrpLeaveRequestsVo> selectVoListByUsersAndDate(
         @Param("userIds") List<Long> userIds,
         @Param("startDate") LocalDate startDate,

@@ -13,15 +13,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 智能排班算法核心服务 (已完善版)
+ * 智能排班算法核心服务 (已修复版)
  */
 @Service
 public class SchedulingAlgorithmService {
@@ -125,7 +125,7 @@ public class SchedulingAlgorithmService {
     private void handleFullTimeLeaveConflicts(AlgorithmInput input) {
         Map<LocalDate, List<HrpLeaveRequestsVo>> fullTimeLeaveMap = input.getLeaveRequests().stream()
             .filter(lr -> "全职".equals(findEmployeeType(lr.getUserId(), input.getEmployees())) && "已提交".equals(lr.getApprovalStatus()))
-            .collect(Collectors.groupingBy(lr -> lr.getLeaveDate()));
+            .collect(Collectors.groupingBy(HrpLeaveRequestsVo::getLeaveDate));
 
         fullTimeLeaveMap.forEach((date, requests) -> {
             if (requests.size() > MAX_FULLTIME_LEAVE_PER_DAY) {
@@ -207,13 +207,13 @@ public class SchedulingAlgorithmService {
         if (availabilities == null || availabilities.isEmpty()) return true; // 未设置则全天可用
 
         int dayOfWeek = date.getDayOfWeek().getValue();
-        LocalTime shiftStart = shift.getStartTime().toLocalTime();
-        LocalTime shiftEnd = shift.getEndTime().toLocalTime();
+        LocalTime shiftStart = shift.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+        LocalTime shiftEnd = shift.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
 
         for (HrpUserAvailabilityVo avail : availabilities) {
             if (avail.getDayOfWeek() == dayOfWeek) {
-                LocalTime availStart = avail.getStartTime().toLocalTime();
-                LocalTime availEnd = avail.getEndTime().toLocalTime();
+                LocalTime availStart = avail.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+                LocalTime availEnd = avail.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
                 // 班次开始时间 >= 可用开始时间 AND 班次结束时间 <= 可用结束时间
                 if (!shiftStart.isBefore(availStart) && !shiftEnd.isAfter(availEnd)) {
                     return true;
@@ -312,7 +312,7 @@ public class SchedulingAlgorithmService {
 
     private String getDayType(LocalDate date, List<HrpStoreEventsVo> storeEvents) {
         for (HrpStoreEventsVo event : storeEvents) {
-            if (event.getEventDate().toLocalDate().isEqual(date)) {
+            if (event.getEventDate().isEqual(date)) {
                 return "特殊节日"; // 假设所有事件都对应特殊节日的人力需求
             }
         }

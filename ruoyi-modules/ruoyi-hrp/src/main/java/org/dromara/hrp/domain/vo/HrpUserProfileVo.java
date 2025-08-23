@@ -11,8 +11,7 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.Date;
-
-
+import java.util.List;
 
 /**
  * 员工档案扩展视图对象 hrp_user_profile
@@ -69,6 +68,11 @@ public class HrpUserProfileVo implements Serializable {
      */
     @ExcelProperty(value = "备注")
     private String remark;
+
+    /**
+     * 员工技能列表
+     */
+    private List<HrpSkillsVo> skills;
 
 
 }

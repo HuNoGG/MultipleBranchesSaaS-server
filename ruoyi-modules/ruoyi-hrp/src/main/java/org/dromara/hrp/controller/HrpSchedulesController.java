@@ -79,7 +79,7 @@ public class HrpSchedulesController extends BaseController {
     @PostMapping("/generate")
     public R<Void> generateSchedule(@RequestBody HrpSchedulesBo bo) {
         // 此处调用核心算法
-        // hrpSchedulesService.generateSchedule(bo);
+         hrpSchedulesService.generateSchedule(bo);
         // 为演示目的，我们先返回成功
         return R.ok("智能排班任务已启动");
     }

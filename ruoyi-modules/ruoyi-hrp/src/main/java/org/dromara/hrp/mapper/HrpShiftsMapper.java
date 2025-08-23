@@ -18,7 +18,7 @@ public interface HrpShiftsMapper extends BaseMapperPlus<HrpShifts, HrpShiftsVo> 
 
 
 
-    @Select("select * from hrp_shifts where store_id = #{stroeId} ")
+    @Select("select * from hrp_shifts where store_id = #{storeId} ")
     List<HrpShiftsVo> selectVoListByStoreId(@Param("storeId") Long storeId);
 
 

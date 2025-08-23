@@ -130,4 +130,15 @@ public class HrpSkillsServiceImpl implements IHrpSkillsService {
         }
         return baseMapper.deleteByIds(ids) > 0;
     }
+
+    /**
+     * 查询用户技能岗位列表
+     *
+     * @param userId
+     * @return
+     */
+    @Override
+    public List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId) {
+        return baseMapper.selectVoListWithUserSkillByUserId(userId);
+    }
 }

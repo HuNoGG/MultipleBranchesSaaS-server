@@ -34,25 +34,23 @@ public class HrpUserProfileBo extends BaseEntity {
     /**
      * 分店 ID
      */
-    @NotNull(message = "分店 ID不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotNull(message = "分店ID不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long mainStoreId;
 
     /**
      * 分配工作优先分数
      */
-    @NotNull(message = "分配工作优先分数不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotNull(message = "优先分数不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long priorityScore;
 
     /**
      * 状态(0在职1离职)
      */
-    @NotBlank(message = "状态(0在职1离职)不能为空", groups = { AddGroup.class, EditGroup.class })
     private String status;
 
     /**
      * 备注
      */
-    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
     private String remark;
 
 
