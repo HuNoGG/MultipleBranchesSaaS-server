@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.hrp.domain.HrpUserProfile;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
 import org.dromara.hrp.domain.vo.HrpUserProfileVo;
 import org.dromara.hrp.mapper.HrpUserProfileMapper;
@@ -66,8 +67,8 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
         List<HrpUserProfileVo> employees = new ArrayList<>();
         if (!userIds.isEmpty()) {
             employees = userProfileMapper.selectVoList(
-                new LambdaQueryWrapper<org.dromara.hrp.domain.HrpUserProfile>()
-                    .in(org.dromara.hrp.domain.HrpUserProfile::getUserId, userIds)
+                new LambdaQueryWrapper<HrpUserProfile>()
+                    .in(HrpUserProfile::getUserId, userIds)
             );
         }
 

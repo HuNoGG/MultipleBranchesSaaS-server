@@ -60,7 +60,7 @@ public class HrpSchedules extends BaseEntity {
      * 版本号,用于管理与回溯
      */
     @Version
-    private Long version;
+    private Integer version;
 
 
 }

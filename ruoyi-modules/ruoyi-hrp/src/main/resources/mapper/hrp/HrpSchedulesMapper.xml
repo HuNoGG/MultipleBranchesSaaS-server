@@ -26,7 +26,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <sql id="selectHrpSchedulesVo">
         select s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version,
-               u.user_name as user_name,
+               u.nick_name as user_name,
                sh.name as shift_name,
                sh.code as shift_code,
                sh.start_time as shift_start_time,

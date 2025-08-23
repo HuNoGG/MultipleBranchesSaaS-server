@@ -123,5 +123,4 @@ public interface UserService {
      * @return Map，其中 key 为岗位 ID，value 为对应的岗位名称
      */
     Map<Long, String> selectPostNamesByIds(List<Long> postIds);
-
 }

@@ -254,7 +254,7 @@ public class SchedulingAlgorithmService {
     private List<HrpSchedules> buildAndSaveResults(ScheduleMatrix matrix, HrpSchedulesBo bo) {
         schedulesMapper.deleteDraftSchedules(bo.getStoreId(), bo.getScheduleDate(), LocalDate.parse(bo.getParams().get("endDate").toString()));
         List<HrpSchedules> schedules = new ArrayList<>();
-        long version = System.currentTimeMillis();
+//        int version = (int) (System.currentTimeMillis() / 1000);
 
         for (Map.Entry<String, ScheduleAssignment> entry : matrix.getAssignments().entrySet()) {
             String[] keyParts = entry.getKey().split(":");
@@ -264,7 +264,7 @@ public class SchedulingAlgorithmService {
             schedule.setStoreId(bo.getStoreId());
             schedule.setShiftId(entry.getValue().getShiftId());
             schedule.setSkillId(entry.getValue().getSkillId());
-            schedule.setVersion(version);
+//            schedule.setVersion(version);
             schedules.add(schedule);
         }
 

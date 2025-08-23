@@ -71,8 +71,8 @@ public class HrpSchedulesVo implements Serializable {
     private String userName;
     private String shiftName;
     private String shiftCode;
-    private Date shiftStartTime;
-    private Date shiftEndTime;
+    private String shiftStartTime;
+    private String shiftEndTime;
     private String shiftColorCode;
     private String skillName;
     private String attendanceStatus;

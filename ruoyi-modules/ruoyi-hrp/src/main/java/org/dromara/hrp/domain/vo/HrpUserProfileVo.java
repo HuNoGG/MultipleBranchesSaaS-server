@@ -1,5 +1,7 @@
 package org.dromara.hrp.domain.vo;
 
+import org.dromara.common.translation.annotation.Translation;
+import org.dromara.common.translation.constant.TransConstant;
 import org.dromara.hrp.domain.HrpUserProfile;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -36,6 +38,7 @@ public class HrpUserProfileVo implements Serializable {
     /**
      * 员工名称
      */
+    @Translation(type = TransConstant.USER_ID_TO_NAME, mapper = "userId", other = "nickName")
     private String userName;
 
     /**
