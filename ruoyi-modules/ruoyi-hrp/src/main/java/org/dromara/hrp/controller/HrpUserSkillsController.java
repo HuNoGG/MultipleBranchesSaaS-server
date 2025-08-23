@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.common.core.utils.MapstructUtils;
+import org.dromara.hrp.domain.HrpUserSkills;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -93,13 +95,17 @@ public class HrpUserSkillsController extends BaseController {
     /**
      * 删除员工技能关联
      *
-     * @param userIds 主键串
+     * @param userId 员工ID
+     * @param skillId 技能ID
      */
     @SaCheckPermission("hrp:userSkills:remove")
     @Log(title = "员工技能关联", businessType = BusinessType.DELETE)
-    @DeleteMapping("/{userIds}")
-    public R<Void> remove(@NotEmpty(message = "主键不能为空")
-                          @PathVariable Long[] userIds) {
-        return toAjax(hrpUserSkillsService.deleteWithValidByIds(List.of(userIds), true));
+    @DeleteMapping()
+    public R<Void> remove(@NotNull(message = "用户ID不能为空") @RequestParam Long userId,
+        @NotNull(message = "技能ID不能为空") @RequestParam Long skillId) {
+        HrpUserSkillsBo bo = new HrpUserSkillsBo();
+        bo.setUserId(userId);
+        bo.setSkillId(skillId);
+        return toAjax(hrpUserSkillsService.deleteByBo(bo));
     }
 }

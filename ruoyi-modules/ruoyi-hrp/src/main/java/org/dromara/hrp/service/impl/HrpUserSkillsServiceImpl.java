@@ -71,7 +71,6 @@ public class HrpUserSkillsServiceImpl implements IHrpUserSkillsService {
     }
 
     private LambdaQueryWrapper<HrpUserSkills> buildQueryWrapper(HrpUserSkillsBo bo) {
-        Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<HrpUserSkills> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(HrpUserSkills::getUserId);
         lqw.orderByAsc(HrpUserSkills::getSkillId);
@@ -128,5 +127,19 @@ public class HrpUserSkillsServiceImpl implements IHrpUserSkillsService {
             //TODO 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteByIds(ids) > 0;
+    }
+
+    /**
+     * 校验并删除员工技能关联信息
+     *
+     * @param bo 待删除的业务对象
+     * @return 是否删除成功
+     */
+    @Override
+    public Boolean deleteByBo(HrpUserSkillsBo bo) {
+        LambdaQueryWrapper<HrpUserSkills> lqw = new LambdaQueryWrapper<>();
+        lqw.eq(HrpUserSkills::getUserId, bo.getUserId());
+        lqw.eq(HrpUserSkills::getSkillId, bo.getSkillId());
+        return baseMapper.delete(lqw) > 0;
     }
 }

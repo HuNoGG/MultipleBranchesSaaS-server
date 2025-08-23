@@ -1,5 +1,6 @@
 package org.dromara.hrp.service;
 
+import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
 import org.dromara.hrp.domain.vo.HrpSchedulesVo;
 import org.dromara.hrp.domain.bo.HrpSchedulesBo;
@@ -33,7 +34,7 @@ public interface IHrpSchedulesService {
     /**
      * 智能生成排班计划
      */
-    void generateSchedule(HrpSchedulesBo bo);
+    void generateSchedule(ScheduleGenerateDto dto);
 
     /**
      * 查询排班

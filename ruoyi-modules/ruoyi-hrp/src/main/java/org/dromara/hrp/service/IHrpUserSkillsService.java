@@ -65,4 +65,11 @@ public interface IHrpUserSkillsService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    /**
+     * 删除员工技能关联
+     * @param bo
+     * @return
+     */
+    Boolean deleteByBo(HrpUserSkillsBo bo);
 }

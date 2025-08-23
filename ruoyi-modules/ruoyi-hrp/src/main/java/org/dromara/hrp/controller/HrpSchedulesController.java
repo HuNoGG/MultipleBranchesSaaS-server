@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -48,8 +49,8 @@ public class HrpSchedulesController extends BaseController {
      */
     @GetMapping("/plan")
     public R<SchedulePlanDto> getSchedulePlan(@RequestParam Long storeId,
-                                              @RequestParam String startDate,
-                                              @RequestParam String endDate) {
+        @RequestParam String startDate,
+        @RequestParam String endDate) {
         SchedulePlanDto schedulePlan = hrpSchedulesService.getSchedulePlan(storeId, startDate, endDate);
         return R.ok(schedulePlan);
     }
@@ -63,8 +64,8 @@ public class HrpSchedulesController extends BaseController {
      */
     @GetMapping("/history")
     public R<SchedulePlanDto> getScheduleHistory(@RequestParam Long storeId,
-                                                 @RequestParam String startDate,
-                                                 @RequestParam String endDate) {
+        @RequestParam String startDate,
+        @RequestParam String endDate) {
         // 复用getSchedulePlan DTO，但service层实现不同，会包含考勤状态
         SchedulePlanDto scheduleHistory = hrpSchedulesService.getScheduleHistory(storeId, startDate, endDate);
         return R.ok(scheduleHistory);
@@ -72,15 +73,13 @@ public class HrpSchedulesController extends BaseController {
 
     /**
      * 智能生成排班计划 (草稿)
-     * @param bo 包含分店、日期范围、员工、岗位需求的业务对象
+     * @param dto 包含分店、日期范围、员工、岗位需求的业务对象
      * @return 生成的排班计划草稿
      */
     @Log(title = "智能排班", businessType = BusinessType.INSERT)
     @PostMapping("/generate")
-    public R<Void> generateSchedule(@RequestBody HrpSchedulesBo bo) {
-        // 此处调用核心算法
-         hrpSchedulesService.generateSchedule(bo);
-        // 为演示目的，我们先返回成功
+    public R<Void> generateSchedule(@Validated @RequestBody ScheduleGenerateDto dto) {
+        hrpSchedulesService.generateSchedule(dto);
         return R.ok("智能排班任务已启动");
     }
 
@@ -114,7 +113,7 @@ public class HrpSchedulesController extends BaseController {
     @SaCheckPermission("hrp:schedules:query")
     @GetMapping("/{id}")
     public R<HrpSchedulesVo> getInfo(@NotNull(message = "主键不能为空")
-                                     @PathVariable Long id) {
+    @PathVariable Long id) {
         return R.ok(hrpSchedulesService.queryById(id));
     }
 
@@ -149,7 +148,7 @@ public class HrpSchedulesController extends BaseController {
     @Log(title = "排班", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ids}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
-                          @PathVariable Long[] ids) {
+    @PathVariable Long[] ids) {
         return toAjax(hrpSchedulesService.deleteWithValidByIds(List.of(ids), true));
     }
 }

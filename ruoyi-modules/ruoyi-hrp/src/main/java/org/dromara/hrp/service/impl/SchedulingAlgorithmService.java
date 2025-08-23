@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.hrp.domain.HrpSchedules;
-import org.dromara.hrp.domain.bo.HrpSchedulesBo;
+import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
 import org.dromara.hrp.domain.vo.*;
 import org.dromara.hrp.mapper.*;
 import org.slf4j.Logger;
@@ -55,21 +55,21 @@ public class SchedulingAlgorithmService {
      * 智能排班算法入口
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<HrpSchedules> generateSchedule(HrpSchedulesBo bo) {
-        log.info("智能排班任务启动，分店ID: {}, 日期范围: {} to {}", bo.getStoreId(), bo.getScheduleDate(), bo.getParams().get("endDate"));
+    public List<HrpSchedules> generateSchedule(ScheduleGenerateDto dto) {
+        log.info("智能排班任务启动，分店ID: {}, 日期范围: {} to {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
 
         // 1. 准备算法输入数据
-        AlgorithmInput input = prepareInputData(bo);
+        AlgorithmInput input = prepareInputData(dto);
 
         // 2. 初始化排班矩阵
-        ScheduleMatrix matrix = initializeMatrix(input);
+        ScheduleMatrix matrix = initializeMatrix(input, dto);
 
         // 3. 执行排班算法核心步骤
         assignFullTimeEmployees(matrix, input);
         fillRemainingShifts(matrix, input);
 
         // 4. 生成结果并保存
-        List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, bo);
+        List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, dto);
 
         // 5. 打印未满足的需求报告
         printUnsatisfiedRequirements(matrix, input);
@@ -81,14 +81,23 @@ public class SchedulingAlgorithmService {
     /**
      * Step 1: 准备所有需要的数据
      */
-    private AlgorithmInput prepareInputData(HrpSchedulesBo bo) {
-        Long storeId = bo.getStoreId();
-        LocalDate startDate = bo.getScheduleDate();
-        LocalDate endDate = LocalDate.parse(bo.getParams().get("endDate").toString());
+    private AlgorithmInput prepareInputData(ScheduleGenerateDto dto) {
+        Long storeId = dto.getStoreId();
+        LocalDate startDate = dto.getStartDate();
+        LocalDate endDate = dto.getEndDate();
 
-        List<HrpUserProfileVo> employees = userProfileMapper.selectVoListByStoreId(storeId);
-        if (employees.isEmpty()) throw new ServiceException("该分店下没有找到任何在职员工");
-        List<Long> userIds = employees.stream().map(HrpUserProfileVo::getUserId).collect(Collectors.toList());
+        // 从DTO中获取参与排班的员工ID
+        List<Long> userIds = dto.getEmployees().stream()
+            .map(ScheduleGenerateDto.EmployeeConfig::getId)
+            .collect(Collectors.toList());
+
+        if (userIds.isEmpty()) {
+            throw new ServiceException("请选择至少一名员工参与排班");
+        }
+
+        // 查询这些员工的详细信息
+        List<HrpUserProfileVo> employees = userProfileMapper.selectVoList(userIds);
+        if (employees.isEmpty()) throw new ServiceException("未找到任何有效的员工信息");
 
         Map<Long, List<Long>> userSkills = userSkillsMapper.selectVoListByUserIds(userIds).stream()
             .collect(Collectors.groupingBy(HrpUserSkillsVo::getUserId, Collectors.mapping(HrpUserSkillsVo::getSkillId, Collectors.toList())));
@@ -98,29 +107,81 @@ public class SchedulingAlgorithmService {
 
         List<HrpLeaveRequestsVo> leaveRequests = leaveRequestsMapper.selectVoListByUsersAndDate(userIds, startDate, endDate);
         List<HrpShiftsVo> shifts = shiftsMapper.selectVoListByStoreId(storeId);
-        List<HrpScheduleRequirementsVo> requirements = scheduleRequirementsMapper.selectVoListByStoreId(storeId);
+
+        // 使用前端传入的动态需求
+        List<HrpScheduleRequirementsVo> requirements = convertDtoToRequirements(dto.getRequirements(), shifts);
+
         List<HrpStoreEventsVo> storeEvents = storeEventsMapper.selectVoListByStoreAndDate(storeId, startDate, endDate);
 
         return new AlgorithmInput(startDate, endDate, storeId, employees, userSkills, userAvailabilities, leaveRequests, shifts, requirements, storeEvents);
     }
 
     /**
+     * 辅助方法：将DTO中的需求转换为算法所需的格式
+     */
+    private List<HrpScheduleRequirementsVo> convertDtoToRequirements(Map<String, Map<String, Integer>> dtoRequirements, List<HrpShiftsVo> allShifts) {
+        List<HrpScheduleRequirementsVo> reqList = new ArrayList<>();
+        // 实际项目中，需要更精确地匹配技能名称和ID，此处为简化示例
+        Map<String, Long> skillNameToIdMap = new HashMap<>(); // 假设我们能获取到这个映射
+
+        dtoRequirements.forEach((timeSlot, skills) -> {
+            // 根据时间段找到对应的班别ID，这里做简化匹配
+            Long shiftId = allShifts.stream()
+                .filter(s -> (s.getStartTime() + "-" + s.getEndTime()).contains(timeSlot))
+                .map(HrpShiftsVo::getId)
+                .findFirst().orElse(0L);
+
+            skills.forEach((skillName, count) -> {
+                HrpScheduleRequirementsVo req = new HrpScheduleRequirementsVo();
+                req.setDayType("平日"); // 简化处理，实际可根据日期判断
+                req.setShiftId(shiftId);
+                req.setSkillId(skillNameToIdMap.getOrDefault(skillName, 0L)); // 需要技能名称到ID的映射
+                req.setRequiredCount(count);
+                reqList.add(req);
+            });
+        });
+        return reqList;
+    }
+
+
+    /**
      * Step 1 & 1.5: 初始化排班矩阵, 处理休假申请
      */
-    private ScheduleMatrix initializeMatrix(AlgorithmInput input) {
+    private ScheduleMatrix initializeMatrix(AlgorithmInput input, ScheduleGenerateDto dto) {
         ScheduleMatrix matrix = new ScheduleMatrix(input.getStartDate(), input.getEndDate(), input.getEmployees(), input.getShifts());
 
         // Step 1.5: 处理全职休假冲突
         handleFullTimeLeaveConflicts(input);
 
-        // Step 1: 锁定休假日
+        // Step 1: 锁定休假日 (包括员工请假和前端指定的休息日)
         for (HrpLeaveRequestsVo leave : input.getLeaveRequests()) {
             if ("已提交".equals(leave.getApprovalStatus()) || "已锁定".equals(leave.getApprovalStatus())) {
                 matrix.blockDay(leave.getUserId(), leave.getLeaveDate(), "休假");
             }
         }
+        // 锁定前端指定的休息日
+        for (ScheduleGenerateDto.EmployeeConfig empConfig : dto.getEmployees()) {
+            for (String dayOffLabel : empConfig.getDaysOff()) {
+                // 将 "周一 (8.26)" 这样的标签转换为日期
+                LocalDate date = findDateByLabel(dayOffLabel, input.getStartDate(), input.getEndDate());
+                if (date != null) {
+                    matrix.blockDay(empConfig.getId(), date, "休息");
+                }
+            }
+        }
         return matrix;
     }
+
+    private LocalDate findDateByLabel(String label, LocalDate startDate, LocalDate endDate) {
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            String currentLabel = date.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL, Locale.CHINESE) + " (" + date.getMonthValue() + "." + date.getDayOfMonth() + ")";
+            if (label.equals(currentLabel)) {
+                return date;
+            }
+        }
+        return null;
+    }
+
 
     private void handleFullTimeLeaveConflicts(AlgorithmInput input) {
         Map<LocalDate, List<HrpLeaveRequestsVo>> fullTimeLeaveMap = input.getLeaveRequests().stream()
@@ -251,20 +312,20 @@ public class SchedulingAlgorithmService {
     /**
      * Step 6: 生成结果并保存
      */
-    private List<HrpSchedules> buildAndSaveResults(ScheduleMatrix matrix, HrpSchedulesBo bo) {
-        schedulesMapper.deleteDraftSchedules(bo.getStoreId(), bo.getScheduleDate(), LocalDate.parse(bo.getParams().get("endDate").toString()));
+    private List<HrpSchedules> buildAndSaveResults(ScheduleMatrix matrix, ScheduleGenerateDto dto) {
+        schedulesMapper.deleteDraftSchedules(dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
         List<HrpSchedules> schedules = new ArrayList<>();
-//        int version = (int) (System.currentTimeMillis() / 1000);
+        //        int version = (int) (System.currentTimeMillis() / 1000);
 
         for (Map.Entry<String, ScheduleAssignment> entry : matrix.getAssignments().entrySet()) {
             String[] keyParts = entry.getKey().split(":");
             HrpSchedules schedule = new HrpSchedules();
             schedule.setUserId(Long.parseLong(keyParts[0]));
             schedule.setScheduleDate(LocalDate.parse(keyParts[1]));
-            schedule.setStoreId(bo.getStoreId());
+            schedule.setStoreId(dto.getStoreId());
             schedule.setShiftId(entry.getValue().getShiftId());
             schedule.setSkillId(entry.getValue().getSkillId());
-//            schedule.setVersion(version);
+            //            schedule.setVersion(version);
             schedules.add(schedule);
         }
 

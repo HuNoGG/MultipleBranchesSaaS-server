@@ -56,8 +56,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             sh.end_time AS shift_end_time,
             sh.color_code AS shift_color_code,
             sk.name AS skill_name,
-            -- 计算考勤状态
+            -- 计算考勤状态 (已更新)
             CASE
+                WHEN sm.change_type = '替班' THEN '代班'
+                WHEN sm.change_type = '新增临时' THEN '增补'
                 WHEN exc.exception_type IS NOT NULL THEN exc.exception_type
                 WHEN rec.id IS NULL THEN '缺勤'
                 WHEN rec.clock_in_time > ADDTIME(CONCAT(s.schedule_date, ' ', sh.start_time), '00:05:00') THEN '迟到'
@@ -70,6 +72,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                  LEFT JOIN hrp_skills sk ON sk.id = s.skill_id
                  LEFT JOIN hrp_attendance_records rec ON rec.schedule_id = s.id
                  LEFT JOIN hrp_attendance_exceptions exc ON exc.user_id = s.user_id AND exc.exception_date = s.schedule_date
+                 LEFT JOIN hrp_schedule_modifications sm ON sm.schedule_id = s.id -- 新增关联
         WHERE s.store_id = #{storeId}
           AND s.schedule_date BETWEEN #{startDate} AND #{endDate}
         ORDER BY s.schedule_date, sh.start_time

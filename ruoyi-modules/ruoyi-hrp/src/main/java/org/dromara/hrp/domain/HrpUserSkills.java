@@ -14,9 +14,8 @@ import java.io.Serial;
  * @date 2025-08-23
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @TableName("hrp_user_skills")
-public class HrpUserSkills extends BaseEntity {
+public class HrpUserSkills  {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -32,6 +31,11 @@ public class HrpUserSkills extends BaseEntity {
      */
 //    @TableId(value = "skill_id")
     private Long skillId;
+
+    /**
+     *  租户 ID
+     */
+    private Long tenantId;
 
 
 }

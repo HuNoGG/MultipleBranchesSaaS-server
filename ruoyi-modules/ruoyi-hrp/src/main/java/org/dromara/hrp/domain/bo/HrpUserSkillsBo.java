@@ -16,9 +16,8 @@ import jakarta.validation.constraints.*;
  * @date 2025-08-23
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @AutoMapper(target = HrpUserSkills.class, reverseConvertGenerate = false)
-public class HrpUserSkillsBo extends BaseEntity {
+public class HrpUserSkillsBo {
 
     /**
      * 员工 ID

@@ -11,6 +11,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.hrp.domain.HrpUserProfile;
+import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
 import org.dromara.hrp.domain.vo.HrpUserProfileVo;
 import org.dromara.hrp.mapper.HrpUserProfileMapper;
@@ -126,9 +127,9 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
 
 
     @Override
-    public void generateSchedule(HrpSchedulesBo bo) {
+    public void generateSchedule(ScheduleGenerateDto dto) {
         // 调用核心算法服务来生成排班
-        schedulingAlgorithmService.generateSchedule(bo);
+        schedulingAlgorithmService.generateSchedule(dto);
     }
 
 
