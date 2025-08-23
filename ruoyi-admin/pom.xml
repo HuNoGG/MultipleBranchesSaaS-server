@@ -87,6 +87,12 @@
             <artifactId>ruoyi-demo</artifactId>
         </dependency>
 
+        <!--  hrp模块  -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-hrp</artifactId>
+        </dependency>
+
         <!--  工作流模块  -->
         <dependency>
             <groupId>org.dromara</groupId>

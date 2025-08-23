@@ -1,0 +1,82 @@
+package org.dromara.hrp.domain.bo;
+
+import org.dromara.hrp.domain.HrpShifts;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
+import org.dromara.common.core.validate.AddGroup;
+import org.dromara.common.core.validate.EditGroup;
+import io.github.linpeilie.annotations.AutoMapper;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import jakarta.validation.constraints.*;
+import java.util.Date;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+/**
+ * 班别设定业务对象 hrp_shifts
+ *
+ * @author Lion Li
+ * @date 2025-08-23
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@AutoMapper(target = HrpShifts.class, reverseConvertGenerate = false)
+public class HrpShiftsBo extends BaseEntity {
+
+    /**
+     * 班别唯一ID
+     */
+    private Long id;
+
+    /**
+     * 所属分店 ID
+     */
+    @NotNull(message = "所属分店 ID不能为空", groups = { AddGroup.class, EditGroup.class })
+    private Long storeId;
+
+    /**
+     * 班别名称(如:早班)
+     */
+    private String name;
+
+    /**
+     * 班别代码(如:早)
+     */
+    @NotBlank(message = "班别代码(如:早)不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String code;
+
+    /**
+     * 开始时间
+     */
+    private Date startTime;
+
+    /**
+     * 结束时间
+     */
+    private Date endTime;
+
+    /**
+     * 是否跨日(TRUE =是,FALSE =否)
+     */
+    @NotNull(message = "是否跨日(TRUE =是,FALSE =否)不能为空", groups = { AddGroup.class, EditGroup.class })
+    private Long isCrossDay;
+
+    /**
+     * 班表显示颜色(如:#FF5733)
+     */
+    @NotBlank(message = "班表显示颜色(如:#FF5733)不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String colorCode;
+
+    /**
+     * 状态(0正常1停用)
+     */
+    @NotBlank(message = "状态(0正常1停用)不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String status;
+
+    /**
+     * 备注
+     */
+    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String remark;
+
+
+}
