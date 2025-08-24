@@ -79,6 +79,18 @@ public class HrpScheduleModificationsController extends BaseController {
         return toAjax(hrpScheduleModificationsService.insertByBo(bo));
     }
 
+
+    /**
+     * 批量新增排班修改记录 (用于增补多人)
+     */
+    @SaCheckPermission("hrp:scheduleModifications:add")
+    @Log(title = "批量增补排班", businessType = BusinessType.INSERT)
+    @RepeatSubmit()
+    @PostMapping("/batch")
+    public R<Void> addBatch(@Validated(AddGroup.class) @RequestBody List<HrpScheduleModificationsBo> boList) {
+        return toAjax(hrpScheduleModificationsService.insertBatchByBo(boList));
+    }
+
     /**
      * 修改排班修改记录
      */

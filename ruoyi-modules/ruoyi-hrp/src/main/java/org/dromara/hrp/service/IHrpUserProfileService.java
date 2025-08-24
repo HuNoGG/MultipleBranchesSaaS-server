@@ -5,6 +5,7 @@ import org.dromara.hrp.domain.bo.HrpUserProfileBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
@@ -67,4 +68,17 @@ public interface IHrpUserProfileService {
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
 
     List<HrpUserProfileVo> queryListWithSkillsByStoreId(Long storeId);
+
+
+    /**
+     * 查询可用的代班员工列表
+     * @param storeId 门店ID
+     * @param skillId 必需的技能ID
+     * @param scheduleDate 排班日期
+     * @param originalUserId 被代班的员工ID
+     * @return 可用员工列表
+     */
+    List<HrpUserProfileVo> queryAvailableSubstitutes(Long storeId, Long skillId, LocalDate scheduleDate, Long originalUserId);
+
+
 }

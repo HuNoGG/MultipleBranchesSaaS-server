@@ -50,6 +50,14 @@ public interface IHrpScheduleModificationsService {
     Boolean insertByBo(HrpScheduleModificationsBo bo);
 
     /**
+     * 批量新增排班修改记录
+     *
+     * @param boList 待新增的业务对象列表
+     * @return 是否新增成功
+     */
+    Boolean insertBatchByBo(List<HrpScheduleModificationsBo> boList);
+
+    /**
      * 修改排班修改记录
      *
      * @param bo 排班修改记录

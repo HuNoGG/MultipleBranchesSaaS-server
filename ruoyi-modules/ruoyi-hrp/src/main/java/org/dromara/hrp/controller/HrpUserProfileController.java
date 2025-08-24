@@ -1,11 +1,13 @@
 package org.dromara.hrp.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -114,4 +116,23 @@ public class HrpUserProfileController extends BaseController {
                           @PathVariable Long[] userIds) {
         return toAjax(hrpUserProfileService.deleteWithValidByIds(List.of(userIds), true));
     }
+
+    /**
+     * 获取可用于代班的员工列表
+     * @param storeId 门店ID
+     * @param skillId 必需的技能ID
+     * @param scheduleDate 排班日期
+     * @param originalUserId 被代班的员工ID
+     */
+    @GetMapping("/available-substitutes")
+    public R<List<HrpUserProfileVo>> getAvailableSubstitutes(
+        @RequestParam Long storeId,
+        @RequestParam Long skillId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scheduleDate,
+        @RequestParam Long originalUserId
+    ) {
+        List<HrpUserProfileVo> list = hrpUserProfileService.queryAvailableSubstitutes(storeId, skillId, scheduleDate, originalUserId);
+        return R.ok(list);
+    }
+
 }

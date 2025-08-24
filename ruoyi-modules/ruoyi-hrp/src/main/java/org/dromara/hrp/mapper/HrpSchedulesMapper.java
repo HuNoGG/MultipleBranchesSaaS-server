@@ -47,6 +47,16 @@ public interface HrpSchedulesMapper extends BaseMapperPlus<HrpSchedules, HrpSche
 
     void insertBatch(@Param("list") List<HrpSchedules> list);
 
+    /**
+     * 将指定日期范围内的排班状态更新为 "PUBLISHED"
+     * @param storeId 分店ID
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 影响的行数
+     */
+    int publishSchedules(@Param("storeId") Long storeId,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate);
 
-
+    List<HrpSchedulesVo> selectScheduleHistoryBatch(@Param("scheduleIds") List<Long> scheduleIds);
 }

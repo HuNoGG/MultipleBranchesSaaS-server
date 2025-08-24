@@ -66,6 +66,13 @@ public class HrpSchedulesVo implements Serializable {
     @ExcelProperty(value = "排班日期")
     private Date scheduleDate;
 
+
+    /**
+     * 排班的发布状态 ('DRAFT', 'PUBLISHED')
+     */
+    private String status;
+
+
     private String version;
 
     private String userName;
@@ -76,6 +83,7 @@ public class HrpSchedulesVo implements Serializable {
     private String shiftColorCode;
     private String skillName;
     private String attendanceStatus;
+    private String remark; // 增补对象Remark
 
 
 

@@ -21,6 +21,9 @@ public class UserNameTranslationImpl implements TranslationInterface<String> {
     public String translation(Object key, String other) {
         if (key instanceof Long id) {
             if ("nickName".equals(other)) {
+                if(id == 0){
+                    return null;
+                }
                 return userService.selectNicknameById(id);
             }
             return userService.selectUserNameById(id);

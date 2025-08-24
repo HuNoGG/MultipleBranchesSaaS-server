@@ -1,6 +1,9 @@
 package org.dromara.hrp.domain.vo;
 
+import java.time.LocalTime;
 import java.util.Date;
+
+import cn.hutool.core.date.DateTime;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.dromara.hrp.domain.HrpUserAvailability;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
@@ -52,12 +55,14 @@ public class HrpUserAvailabilityVo implements Serializable {
      * 可上班的开始时间
      */
     @ExcelProperty(value = "可上班的开始时间")
+    @JsonFormat(pattern = "HH:mm:ss")
     private Date startTime;
 
     /**
      * 可上班的结束时间
      */
     @ExcelProperty(value = "可上班的结束时间")
+    @JsonFormat(pattern = "HH:mm:ss")
     private Date endTime;
 
 

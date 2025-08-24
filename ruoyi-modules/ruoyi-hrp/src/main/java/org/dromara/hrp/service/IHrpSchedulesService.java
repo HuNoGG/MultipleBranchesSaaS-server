@@ -1,7 +1,9 @@
 package org.dromara.hrp.service;
 
 import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
+import org.dromara.hrp.domain.dto.ScheduleGenerationResult;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
+import org.dromara.hrp.domain.dto.WeeklyScheduleDto;
 import org.dromara.hrp.domain.vo.HrpSchedulesVo;
 import org.dromara.hrp.domain.bo.HrpSchedulesBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -30,11 +32,20 @@ public interface IHrpSchedulesService {
      */
     SchedulePlanDto getScheduleHistory(Long storeId, String startDate, String endDate);
 
+    /**
+     * 获取周度排班数据（包含状态）
+     */
+    WeeklyScheduleDto getWeeklySchedule(Long storeId, String startDate, String endDate);
+
+    /**
+     * 发布指定周的排班
+     */
+    Boolean publishSchedule(Long storeId, String startDate, String endDate);
 
     /**
      * 智能生成排班计划
      */
-    void generateSchedule(ScheduleGenerateDto dto);
+    ScheduleGenerationResult generateSchedule(ScheduleGenerateDto dto);
 
     /**
      * 查询排班

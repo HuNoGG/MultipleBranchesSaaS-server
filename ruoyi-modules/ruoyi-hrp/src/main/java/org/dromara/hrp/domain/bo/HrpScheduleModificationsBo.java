@@ -8,6 +8,8 @@ import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
+
+import java.time.LocalDate;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -30,19 +32,19 @@ public class HrpScheduleModificationsBo extends BaseEntity {
     /**
      * 关联的排班记录ID(原排班表主键)
      */
-    @NotNull(message = "关联的排班记录ID(原排班表主键)不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotNull(message = "关联的排班记录ID不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long scheduleId;
 
     /**
      * 原员工ID(修改前的排班员工)
      */
-    @NotNull(message = "原员工ID(修改前的排班员工)不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotNull(message = "原员工ID不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long originalUserId;
 
     /**
      * 新员工ID(修改后的排班员工,change_type为'新增临时')
      */
-    @NotNull(message = "新员工ID(修改后的排班员工,change_type为'新增临时')不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotNull(message = "新员工ID不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long newUserId;
 
     /**
@@ -54,20 +56,21 @@ public class HrpScheduleModificationsBo extends BaseEntity {
     /**
      * 修改人ID(操作修改的用户)
      */
-    @NotNull(message = "修改人ID(操作修改的用户)不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long changedBy;
 
     /**
      * 修改时间
      */
-    @NotNull(message = "修改时间不能为空", groups = { AddGroup.class, EditGroup.class })
     private Date changeTime;
 
     /**
      * 备注(如:调班原因、替班说明等)
      */
-    @NotBlank(message = "备注(如:调班原因、替班说明等)不能为空", groups = { AddGroup.class, EditGroup.class })
     private String remark;
+
+    private Long storeId;
+
+    private LocalDate scheduleDate;
 
 
 }

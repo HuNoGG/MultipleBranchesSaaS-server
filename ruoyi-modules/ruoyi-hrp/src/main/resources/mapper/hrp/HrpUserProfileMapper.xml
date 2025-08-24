@@ -4,4 +4,49 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.hrp.mapper.HrpUserProfileMapper">
 
+    <select id="selectVoByUserIds" resultType="org.dromara.hrp.domain.vo.HrpUserProfileVo">
+        select u.*,usr.user_name as userName from hrp_user_profile u left join sys_user usr on u.user_id = usr.user_id where u.user_id in
+        <foreach collection="userIds" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="selectAvailableSubstitutes" resultType="org.dromara.hrp.domain.vo.HrpUserProfileVo">
+        SELECT
+            p.user_id,
+            u.user_name as userName,
+            u.nick_name as nickName,
+            p.employee_type
+        FROM
+            hrp_user_profile p
+                JOIN
+            sys_user u ON p.user_id = u.user_id
+        WHERE
+          -- 1. 必须是同一家店的在职员工
+            p.main_store_id = #{storeId}
+          AND p.status = '0'
+          -- 2. 不能是正在被代班的原始员工
+          AND p.user_id != #{originalUserId}
+          -- 3. 必须拥有指定的技能
+          AND EXISTS (
+            SELECT 1
+            FROM hrp_user_skills us
+            WHERE us.user_id = p.user_id AND us.skill_id = #{skillId}
+        )
+          -- 4. 在指定日期没有其他排班
+          AND NOT EXISTS (
+            SELECT 1
+            FROM hrp_schedules s
+            WHERE s.user_id = p.user_id AND s.schedule_date = #{scheduleDate}
+        )
+          -- 5. (可选但推荐) 在指定日期没有请假
+          AND NOT EXISTS (
+            SELECT 1
+            FROM hrp_leave_applications la
+            WHERE la.user_id = p.user_id
+              AND #{scheduleDate} BETWEEN DATE(la.start_time) AND DATE(la.end_time)
+              AND la.approval_status = '已批准'
+        )
+    </select>
+
 </mapper>

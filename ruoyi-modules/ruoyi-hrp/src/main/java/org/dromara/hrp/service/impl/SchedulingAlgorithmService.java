@@ -5,6 +5,7 @@ import lombok.Data;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.hrp.domain.HrpSchedules;
 import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
+import org.dromara.hrp.domain.dto.ScheduleGenerationResult;
 import org.dromara.hrp.domain.vo.*;
 import org.dromara.hrp.mapper.*;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -50,16 +52,25 @@ public class SchedulingAlgorithmService {
     @Autowired
     private HrpStoreEventsMapper storeEventsMapper;
 
+    @Autowired
+    private HrpSkillsMapper skillsMapper;
+
 
     /**
      * 智能排班算法入口
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<HrpSchedules> generateSchedule(ScheduleGenerateDto dto) {
+    public ScheduleGenerationResult generateSchedule(ScheduleGenerateDto dto) {
+        List<String> feedbackMessages = new ArrayList<>();
         log.info("智能排班任务启动，分店ID: {}, 日期范围: {} to {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
 
         // 1. 准备算法输入数据
-        AlgorithmInput input = prepareInputData(dto);
+        AlgorithmInput input = prepareInputData(dto, feedbackMessages);
+
+        // 如果在准备阶段就有错误（如找不到技能），则提前返回
+        if (!feedbackMessages.isEmpty() && input.getRequirements().isEmpty()) {
+            return new ScheduleGenerationResult(new ArrayList<>(), feedbackMessages);
+        }
 
         // 2. 初始化排班矩阵
         ScheduleMatrix matrix = initializeMatrix(input, dto);
@@ -71,17 +82,18 @@ public class SchedulingAlgorithmService {
         // 4. 生成结果并保存
         List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, dto);
 
-        // 5. 打印未满足的需求报告
-        printUnsatisfiedRequirements(matrix, input);
+        // 5. 生成未满足的需求报告
+        generateUnsatisfiedRequirementsReport(matrix, input, feedbackMessages);
 
         log.info("智能排班任务完成，共生成 {} 条排班记录。", generatedSchedules.size());
-        return generatedSchedules;
+        return new ScheduleGenerationResult(generatedSchedules, feedbackMessages);
     }
+
 
     /**
      * Step 1: 准备所有需要的数据
      */
-    private AlgorithmInput prepareInputData(ScheduleGenerateDto dto) {
+    private AlgorithmInput prepareInputData(ScheduleGenerateDto dto, List<String> feedbackMessages) {
         Long storeId = dto.getStoreId();
         LocalDate startDate = dto.getStartDate();
         LocalDate endDate = dto.getEndDate();
@@ -96,7 +108,7 @@ public class SchedulingAlgorithmService {
         }
 
         // 查询这些员工的详细信息
-        List<HrpUserProfileVo> employees = userProfileMapper.selectVoList(userIds);
+        List<HrpUserProfileVo> employees = userProfileMapper.selectVoByUserIds(userIds);
         if (employees.isEmpty()) throw new ServiceException("未找到任何有效的员工信息");
 
         Map<Long, List<Long>> userSkills = userSkillsMapper.selectVoListByUserIds(userIds).stream()
@@ -109,9 +121,10 @@ public class SchedulingAlgorithmService {
         List<HrpShiftsVo> shifts = shiftsMapper.selectVoListByStoreId(storeId);
 
         // 使用前端传入的动态需求
-        List<HrpScheduleRequirementsVo> requirements = convertDtoToRequirements(dto.getRequirements(), shifts);
+        List<HrpScheduleRequirementsVo> requirements = convertDtoToRequirements(dto.getRequirements(), shifts,feedbackMessages);
 
         List<HrpStoreEventsVo> storeEvents = storeEventsMapper.selectVoListByStoreAndDate(storeId, startDate, endDate);
+
 
         return new AlgorithmInput(startDate, endDate, storeId, employees, userSkills, userAvailabilities, leaveRequests, shifts, requirements, storeEvents);
     }
@@ -119,29 +132,54 @@ public class SchedulingAlgorithmService {
     /**
      * 辅助方法：将DTO中的需求转换为算法所需的格式
      */
-    private List<HrpScheduleRequirementsVo> convertDtoToRequirements(Map<String, Map<String, Integer>> dtoRequirements, List<HrpShiftsVo> allShifts) {
+    private List<HrpScheduleRequirementsVo> convertDtoToRequirements(Map<String, Map<String, Integer>> dtoRequirements, List<HrpShiftsVo> allShifts, List<String> feedbackMessages) {
         List<HrpScheduleRequirementsVo> reqList = new ArrayList<>();
-        // 实际项目中，需要更精确地匹配技能名称和ID，此处为简化示例
-        Map<String, Long> skillNameToIdMap = new HashMap<>(); // 假设我们能获取到这个映射
+
+        List<HrpSkillsVo> allSkills = skillsMapper.selectVoList();
+        Map<String, Long> skillNameToIdMap = allSkills.stream()
+            .collect(Collectors.toMap(HrpSkillsVo::getName, HrpSkillsVo::getId, (existing, replacement) -> existing));
+
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         dtoRequirements.forEach((timeSlot, skills) -> {
-            // 根据时间段找到对应的班别ID，这里做简化匹配
             Long shiftId = allShifts.stream()
-                .filter(s -> (s.getStartTime() + "-" + s.getEndTime()).contains(timeSlot))
+                .filter(s -> {
+                    String startTime = s.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormatter);
+                    String endTime = s.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormatter);
+                    return timeSlot.equals(startTime + "-" + endTime);
+                })
                 .map(HrpShiftsVo::getId)
-                .findFirst().orElse(0L);
+                .findFirst()
+                .orElse(null);
+
+            if (shiftId == null) {
+                String message = String.format("配置错误：未找到与时间段 [%s] 完全匹配的班次定义。", timeSlot);
+                log.warn(message);
+                feedbackMessages.add(message);
+                return;
+            }
 
             skills.forEach((skillName, count) -> {
-                HrpScheduleRequirementsVo req = new HrpScheduleRequirementsVo();
-                req.setDayType("平日"); // 简化处理，实际可根据日期判断
-                req.setShiftId(shiftId);
-                req.setSkillId(skillNameToIdMap.getOrDefault(skillName, 0L)); // 需要技能名称到ID的映射
-                req.setRequiredCount(count);
-                reqList.add(req);
+                Long skillId = skillNameToIdMap.get(skillName);
+                if (skillId == null) {
+                    String message = String.format("配置错误：未找到名为 '%s' 的技能。", skillName);
+                    log.warn(message);
+                    feedbackMessages.add(message);
+                    return;
+                }
+                if (count > 0) {
+                    HrpScheduleRequirementsVo req = new HrpScheduleRequirementsVo();
+                    req.setDayType("平日");
+                    req.setShiftId(shiftId);
+                    req.setSkillId(skillId);
+                    req.setRequiredCount(count);
+                    reqList.add(req);
+                }
             });
         });
         return reqList;
     }
+
 
 
     /**
@@ -320,6 +358,7 @@ public class SchedulingAlgorithmService {
         for (Map.Entry<String, ScheduleAssignment> entry : matrix.getAssignments().entrySet()) {
             String[] keyParts = entry.getKey().split(":");
             HrpSchedules schedule = new HrpSchedules();
+            schedule.setStatus("DRAFT");
             schedule.setUserId(Long.parseLong(keyParts[0]));
             schedule.setScheduleDate(LocalDate.parse(keyParts[1]));
             schedule.setStoreId(dto.getStoreId());
@@ -336,20 +375,15 @@ public class SchedulingAlgorithmService {
     }
 
     /**
-     * Step 6: 生成并打印人力缺口报告
+     * Step 6: 生成人力缺口报告并添加到反馈列表
      */
-    private void printUnsatisfiedRequirements(ScheduleMatrix matrix, AlgorithmInput input) {
-        StringBuilder report = new StringBuilder("\n----------- 智能排班人力缺口报告 -----------");
+    private void generateUnsatisfiedRequirementsReport(ScheduleMatrix matrix, AlgorithmInput input, List<String> feedbackMessages) {
         boolean hasDeficit = false;
         long days = ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()) + 1;
 
         for (int i = 0; i < days; i++) {
             LocalDate currentDate = input.getStartDate().plusDays(i);
-            String dayType = getDayType(currentDate, input.getStoreEvents());
-
             for (HrpScheduleRequirementsVo req : input.getRequirements()) {
-                if (!req.getDayType().equals(dayType)) continue;
-
                 int requiredCount = req.getRequiredCount();
                 int assignedCount = matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
                 int deficit = requiredCount - assignedCount;
@@ -357,18 +391,19 @@ public class SchedulingAlgorithmService {
                 if (deficit > 0) {
                     hasDeficit = true;
                     String shiftName = input.getShiftsById().get(req.getShiftId()).getName();
-                    String skillName = "SkillID:" + req.getSkillId(); // 在实际项目中应关联技能表获取名称
-                    report.append(String.format("\n[缺口] 日期: %s, 班次: %s, 岗位: %s, 需求: %d, 已排: %d, 缺少: %d人",
-                        currentDate, shiftName, skillName, requiredCount, assignedCount, deficit));
+                    // 在实际项目中应关联技能表获取名称
+                    String skillName = "SkillID:" + req.getSkillId();
+                    String message = String.format("人力缺口：日期 %s, 班次 [%s], 岗位 [%s], 缺少 %d 人",
+                        currentDate, shiftName, skillName, deficit);
+                    log.warn(message);
+                    feedbackMessages.add(message);
                 }
             }
         }
 
-        if (!hasDeficit) {
-            report.append("\n所有岗位均已满足人力需求。");
+        if (!hasDeficit && feedbackMessages.isEmpty()) {
+            log.info("所有岗位均已满足人力需求。");
         }
-        report.append("\n-------------------------------------------------");
-        log.warn(report.toString());
     }
 
     private String getDayType(LocalDate date, List<HrpStoreEventsVo> storeEvents) {

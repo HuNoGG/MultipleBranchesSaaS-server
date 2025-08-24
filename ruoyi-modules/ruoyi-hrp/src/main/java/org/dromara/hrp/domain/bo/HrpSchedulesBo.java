@@ -59,4 +59,11 @@ public class HrpSchedulesBo extends BaseEntity {
     private LocalDate scheduleDate;
 
 
+    /**
+     * 排班的发布状态 ('DRAFT', 'PUBLISHED')
+     */
+    private String status;
+
+
+
 }

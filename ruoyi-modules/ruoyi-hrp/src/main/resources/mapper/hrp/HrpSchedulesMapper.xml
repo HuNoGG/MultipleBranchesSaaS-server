@@ -12,6 +12,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="skillId" column="skill_id"/>
         <result property="scheduleDate" column="schedule_date"/>
         <result property="version" column="version"/>
+        <result property="status" column="status"/>
         <!-- 关联查询的字段 -->
         <result property="userName" column="user_name"/>
         <result property="shiftName" column="shift_name"/>
@@ -25,7 +26,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectHrpSchedulesVo">
-        select s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version,
+        select s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status, -- 查询 status 字段
                u.nick_name as user_name,
                sh.name as shift_name,
                sh.code as shift_code,
@@ -39,6 +40,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                  left join hrp_skills sk on sk.id = s.skill_id
     </sql>
 
+
+    <update id="publishSchedules">
+        UPDATE hrp_schedules
+        SET status = 'PUBLISHED'
+        WHERE store_id = #{storeId}
+          AND schedule_date BETWEEN #{startDate} AND #{endDate}
+          AND status = 'DRAFT'
+    </update>
     <select id="selectSchedulePlanList" resultMap="HrpSchedulesResult">
         <include refid="selectHrpSchedulesVo"/>
         where s.store_id = #{storeId}
@@ -56,6 +65,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             sh.end_time AS shift_end_time,
             sh.color_code AS shift_color_code,
             sk.name AS skill_name,
+            sm.remark as remark,
             -- 计算考勤状态 (已更新)
             CASE
                 WHEN sm.change_type = '替班' THEN '代班'
@@ -94,6 +104,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             (#{item.userId}, #{item.storeId}, #{item.shiftId}, #{item.skillId}, #{item.scheduleDate}, #{item.version})
         </foreach>
     </insert>
+
+    <select id="selectScheduleHistoryBatch" resultMap="HrpSchedulesResult">
+        SELECT
+        s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status,
+        u.user_name AS user_name,
+        sh.name AS shift_name,
+        sh.code AS shift_code,
+        sh.start_time AS shift_start_time,
+        sh.end_time AS shift_end_time,
+        sh.color_code AS shift_color_code,
+        sk.name AS skill_name
+        FROM hrp_schedules s
+        LEFT JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN hrp_shifts sh ON sh.id = s.shift_id
+        LEFT JOIN hrp_skills sk ON sk.id = s.skill_id
+        WHERE s.id IN
+        <foreach collection="scheduleIds" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
 
 
 </mapper>

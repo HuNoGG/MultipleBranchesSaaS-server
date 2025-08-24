@@ -18,6 +18,7 @@ import org.dromara.hrp.domain.HrpUserProfile;
 import org.dromara.hrp.mapper.HrpUserProfileMapper;
 import org.dromara.hrp.service.IHrpUserProfileService;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
@@ -147,5 +148,10 @@ public class HrpUserProfileServiceImpl implements IHrpUserProfileService {
             userProfile.setSkills(skillList);
         }
         return userProfileList;
+    }
+
+    @Override
+    public List<HrpUserProfileVo> queryAvailableSubstitutes(Long storeId, Long skillId, LocalDate scheduleDate, Long originalUserId) {
+        return baseMapper.selectAvailableSubstitutes(storeId, skillId, scheduleDate, originalUserId);
     }
 }

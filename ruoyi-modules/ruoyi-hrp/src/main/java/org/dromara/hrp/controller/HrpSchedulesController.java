@@ -7,7 +7,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
+import org.dromara.hrp.domain.dto.ScheduleGenerationResult;
 import org.dromara.hrp.domain.dto.SchedulePlanDto;
+import org.dromara.hrp.domain.dto.WeeklyScheduleDto;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -41,19 +43,34 @@ public class HrpSchedulesController extends BaseController {
 
 
     /**
-     * 查询排班计划列表
+     * 获取周度排班数据（智能判断是草稿还是已发布）
      * @param storeId 分店ID
      * @param startDate 开始日期 (格式: yyyy-MM-dd)
      * @param endDate 结束日期 (格式: yyyy-MM-dd)
-     * @return 结构化的排班计划数据
+     * @return 结构化的周度排班数据
      */
-    @GetMapping("/plan")
-    public R<SchedulePlanDto> getSchedulePlan(@RequestParam Long storeId,
+    @GetMapping("/week")
+    public R<WeeklyScheduleDto> getWeeklySchedule(@RequestParam Long storeId,
         @RequestParam String startDate,
         @RequestParam String endDate) {
-        SchedulePlanDto schedulePlan = hrpSchedulesService.getSchedulePlan(storeId, startDate, endDate);
-        return R.ok(schedulePlan);
+        return R.ok(hrpSchedulesService.getWeeklySchedule(storeId, startDate, endDate));
     }
+
+    /**
+     * 发布一周的排班计划
+     * @param storeId 分店ID
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 操作结果
+     */
+    @Log(title = "发布排班", businessType = BusinessType.UPDATE)
+    @GetMapping("/publish")
+    public R<Void> publishSchedule(@RequestParam Long storeId,
+        @RequestParam String startDate,
+        @RequestParam String endDate) {
+        return toAjax(hrpSchedulesService.publishSchedule(storeId, startDate, endDate));
+    }
+
 
     /**
      * 查询排班历史列表
@@ -72,15 +89,15 @@ public class HrpSchedulesController extends BaseController {
     }
 
     /**
-     * 智能生成排班计划 (草稿)
+     * 智能生成排班计划
      * @param dto 包含分店、日期范围、员工、岗位需求的业务对象
      * @return 生成的排班计划草稿
      */
     @Log(title = "智能排班", businessType = BusinessType.INSERT)
     @PostMapping("/generate")
-    public R<Void> generateSchedule(@Validated @RequestBody ScheduleGenerateDto dto) {
-        hrpSchedulesService.generateSchedule(dto);
-        return R.ok("智能排班任务已启动");
+    public R<ScheduleGenerationResult> generateSchedule(@Validated @RequestBody ScheduleGenerateDto dto) {
+        ScheduleGenerationResult result = hrpSchedulesService.generateSchedule(dto);
+        return R.ok(result);
     }
 
 

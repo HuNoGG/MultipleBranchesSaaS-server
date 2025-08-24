@@ -62,5 +62,11 @@ public class HrpSchedules extends BaseEntity {
     @Version
     private Integer version;
 
+    /**
+     * 排班的发布状态 ('DRAFT', 'PUBLISHED')
+     */
+    private String status;
+
+
 
 }
