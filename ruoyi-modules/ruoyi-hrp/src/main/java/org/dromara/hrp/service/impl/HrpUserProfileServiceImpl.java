@@ -10,7 +10,9 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.hrp.domain.vo.HrpSkillsVo;
+import org.dromara.hrp.domain.vo.HrpUserAvailabilityVo;
 import org.dromara.hrp.service.IHrpSkillsService;
+import org.dromara.hrp.service.IHrpUserAvailabilityService;
 import org.springframework.stereotype.Service;
 import org.dromara.hrp.domain.bo.HrpUserProfileBo;
 import org.dromara.hrp.domain.vo.HrpUserProfileVo;
@@ -36,6 +38,7 @@ public class HrpUserProfileServiceImpl implements IHrpUserProfileService {
 
     private final HrpUserProfileMapper baseMapper;
     private final IHrpSkillsService hrpSkillsService;
+    private final IHrpUserAvailabilityService hrpUserAvailabilityService;
 
     /**
      * 查询员工档案扩展
@@ -142,10 +145,13 @@ public class HrpUserProfileServiceImpl implements IHrpUserProfileService {
     {
         // 1. 根据storeId查询员工列表
         List<HrpUserProfileVo> userProfileList = baseMapper.selectVoListByStoreId(storeId);
-        // 2. 遍历员工列表,查询每个员工的技能
+        // 2. 遍历员工列表,查询每个员工的技能与可上班时间
         for (HrpUserProfileVo userProfile : userProfileList) {
             List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId());
             userProfile.setSkills(skillList);
+            // 3. 查询每个员工的可上班时间
+            List<HrpUserAvailabilityVo> availableTimes = hrpUserAvailabilityService.queryListWithUserAvailabilityByUserId(userProfile.getUserId());
+            userProfile.setAvailableTimes(availableTimes);
         }
         return userProfileList;
     }

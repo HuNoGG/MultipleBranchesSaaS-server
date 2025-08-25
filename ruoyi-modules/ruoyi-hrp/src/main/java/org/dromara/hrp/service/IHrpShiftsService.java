@@ -65,4 +65,11 @@ public interface IHrpShiftsService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    /**
+     * 查询班次和休息时间
+     * @param bo 班次查询条件
+     * @return 班次和休息时间
+     */
+    List<HrpShiftsVo> queryShiftsAndRestTime(HrpShiftsBo bo);
 }

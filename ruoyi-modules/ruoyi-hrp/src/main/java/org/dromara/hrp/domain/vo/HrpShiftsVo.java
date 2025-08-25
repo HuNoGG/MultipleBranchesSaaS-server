@@ -10,12 +10,12 @@ import org.dromara.common.excel.annotation.ExcelDictFormat;
 import org.dromara.common.excel.convert.ExcelDictConvert;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import org.dromara.hrp.domain.dto.StoreSkillDto;
 
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.Date;
-
-
+import java.util.List;
 
 /**
  * 班别设定视图对象 hrp_shifts
@@ -59,12 +59,14 @@ public class HrpShiftsVo implements Serializable {
      * 开始时间
      */
     @ExcelProperty(value = "开始时间")
+    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
     private Date startTime;
 
     /**
      * 结束时间
      */
     @ExcelProperty(value = "结束时间")
+    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
     private Date endTime;
 
     /**
@@ -91,6 +93,11 @@ public class HrpShiftsVo implements Serializable {
     @ExcelProperty(value = "备注")
     private String remark;
 
+    /**
+     * 班次休息集合
+     */
+    private List<HrpShiftBreaksVo> shiftBreaksList;
+
 
     /**
      * 新增方法：计算班次时长（小时）
@@ -108,7 +115,5 @@ public class HrpShiftsVo implements Serializable {
         }
         return durationMillis / (1000.0 * 60 * 60);
     }
-
-
 
 }

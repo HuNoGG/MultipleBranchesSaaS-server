@@ -77,5 +77,11 @@ public class HrpUserProfileVo implements Serializable {
      */
     private List<HrpSkillsVo> skills;
 
+    /**
+     * 员工可上班时间
+     */
+    private List<HrpUserAvailabilityVo>  availableTimes;
+
+
 
 }

@@ -51,6 +51,11 @@ public class HrpSkillsVo implements Serializable {
      */
     @ExcelProperty(value = "备注")
     private String remark;
+    /**
+     * 所属店铺id
+     */
+    private Long storeId;
+
 
 
 }

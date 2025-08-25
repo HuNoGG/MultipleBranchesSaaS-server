@@ -9,6 +9,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.hrp.domain.bo.HrpStoresBo;
+import org.dromara.hrp.domain.dto.StoreSkillDto;
+import org.dromara.hrp.domain.vo.HrpStoresVo;
+import org.dromara.hrp.service.IHrpStoresService;
 import org.springframework.stereotype.Service;
 import org.dromara.hrp.domain.bo.HrpSkillsBo;
 import org.dromara.hrp.domain.vo.HrpSkillsVo;
@@ -16,6 +20,7 @@ import org.dromara.hrp.domain.HrpSkills;
 import org.dromara.hrp.mapper.HrpSkillsMapper;
 import org.dromara.hrp.service.IHrpSkillsService;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
@@ -32,6 +37,7 @@ import java.util.Collection;
 public class HrpSkillsServiceImpl implements IHrpSkillsService {
 
     private final HrpSkillsMapper baseMapper;
+    private final IHrpStoresService hrpStoreService;
 
     /**
      * 查询技能岗位
@@ -76,6 +82,7 @@ public class HrpSkillsServiceImpl implements IHrpSkillsService {
         lqw.orderByAsc(HrpSkills::getId);
         lqw.like(StringUtils.isNotBlank(bo.getName()), HrpSkills::getName, bo.getName());
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), HrpSkills::getStatus, bo.getStatus());
+        lqw.eq(bo.getStoreId() != null, HrpSkills::getStoreId, bo.getStoreId());
         return lqw;
     }
 
@@ -140,5 +147,30 @@ public class HrpSkillsServiceImpl implements IHrpSkillsService {
     @Override
     public List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId) {
         return baseMapper.selectVoListWithUserSkillByUserId(userId);
+    }
+
+    /**
+     * 查询所有门店的技能岗位列表
+     *
+     * @param bo
+     * @return
+     */
+    @Override
+    public List<StoreSkillDto> queryStoreList(HrpSkillsBo bo) {
+        List<StoreSkillDto> result = new ArrayList<>();
+
+        // 1.查询所有门店
+        List<HrpStoresVo> storeList = hrpStoreService.queryList(new HrpStoresBo());
+        for (HrpStoresVo store : storeList) {
+            HrpSkillsBo requestBo = new HrpSkillsBo();
+            bo.setStoreId(store.getId());
+            List<HrpSkillsVo> list = queryList(requestBo);
+            // 2.查询门店的技能岗位
+            StoreSkillDto dto = new StoreSkillDto();
+            dto.setStoreId(store.getId());
+            dto.setSkills(list);
+            result.add(dto);
+        }
+        return result;
     }
 }

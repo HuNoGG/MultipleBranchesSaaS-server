@@ -3,5 +3,49 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.hrp.mapper.HrpShiftsMapper">
+    <resultMap id="ShiftsWithBreaksResultMap" type="org.dromara.hrp.domain.vo.HrpShiftsVo">
+        <id property="id" column="s_id"/>
+        <result property="storeId" column="s_store_id"/>
+        <result property="name" column="s_name"/>
+        <result property="code" column="s_code"/>
+        <result property="startTime" column="s_start_time"/>
+        <result property="endTime" column="s_end_time"/>
+        <result property="isCrossDay" column="s_is_cross_day"/>
+        <result property="colorCode" column="s_color_code"/>
+        <result property="status" column="s_status"/>
+        <result property="remark" column="s_remark"/>
 
+        <collection property="shiftBreaksList" ofType="org.dromara.hrp.domain.vo.HrpShiftBreaksVo">
+            <id property="id" column="b_id"/>
+            <result property="shiftId" column="b_shift_id"/>
+            <result property="breakStartTime" column="b_start_time"/>
+            <result property="breakEndTime" column="b_end_time"/>
+        </collection>
+    </resultMap>
+    <select id="selectShiftsWithBreaksByStoreId" resultMap="ShiftsWithBreaksResultMap">
+        SELECT
+            -- 为了防止字段名冲突，给每个字段加上别名
+            s.id as s_id,
+            s.store_id as s_store_id,
+            s.name as s_name,
+            s.code as s_code,
+            s.start_time as s_start_time,
+            s.end_time as s_end_time,
+            s.is_cross_day as s_is_cross_day,
+            s.color_code as s_color_code,
+            s.status as s_status,
+            s.remark as s_remark,
+            b.id as b_id,
+            b.shift_id as b_shift_id,
+            b.break_start_time as b_start_time,
+            b.break_end_time as b_end_time
+        FROM
+            hrp_shifts s
+                LEFT JOIN
+            hrp_shift_breaks b ON s.id = b.shift_id
+        WHERE
+            s.store_id = #{storeId}
+        ORDER BY
+            s.start_time;
+    </select>
 </mapper>

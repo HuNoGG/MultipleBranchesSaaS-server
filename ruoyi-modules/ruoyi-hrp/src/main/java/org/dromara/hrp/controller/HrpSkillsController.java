@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.hrp.domain.dto.StoreSkillDto;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -44,6 +45,19 @@ public class HrpSkillsController extends BaseController {
     public TableDataInfo<HrpSkillsVo> list(HrpSkillsBo bo, PageQuery pageQuery) {
         return hrpSkillsService.queryPageList(bo, pageQuery);
     }
+
+
+    /**
+     * 查询技能岗位列表
+     */
+    @SaCheckPermission("hrp:skills:list")
+    @GetMapping("/store/list")
+    public List<StoreSkillDto> storeList(HrpSkillsBo bo) {
+        return hrpSkillsService.queryStoreList(bo);
+    }
+
+
+
 
     /**
      * 导出技能岗位列表

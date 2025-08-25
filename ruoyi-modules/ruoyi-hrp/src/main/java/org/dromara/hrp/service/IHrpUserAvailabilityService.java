@@ -65,4 +65,11 @@ public interface IHrpUserAvailabilityService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+    /**
+     * 根据用户ID查询员工可上班时段列表
+     *
+     * @param userId 用户ID
+     * @return 员工可上班时段列表
+     */
+    List<HrpUserAvailabilityVo> queryListWithUserAvailabilityByUserId(Long userId);
 }

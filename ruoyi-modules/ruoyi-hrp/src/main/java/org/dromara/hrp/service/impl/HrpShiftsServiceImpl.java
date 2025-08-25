@@ -9,6 +9,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.hrp.domain.bo.HrpShiftBreaksBo;
+import org.dromara.hrp.domain.vo.HrpShiftBreaksVo;
+import org.dromara.hrp.service.IHrpShiftBreaksService;
 import org.springframework.stereotype.Service;
 import org.dromara.hrp.domain.bo.HrpShiftsBo;
 import org.dromara.hrp.domain.vo.HrpShiftsVo;
@@ -16,6 +19,9 @@ import org.dromara.hrp.domain.HrpShifts;
 import org.dromara.hrp.mapper.HrpShiftsMapper;
 import org.dromara.hrp.service.IHrpShiftsService;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
@@ -32,6 +38,7 @@ import java.util.Collection;
 public class HrpShiftsServiceImpl implements IHrpShiftsService {
 
     private final HrpShiftsMapper baseMapper;
+    private final IHrpShiftBreaksService hrpShiftBreaksService;
 
     /**
      * 查询班别设定
@@ -135,5 +142,26 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
             //TODO 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteByIds(ids) > 0;
+    }
+
+    /**
+     * 查询班次和休息时间
+     * @param bo 班次查询条件
+     * @return 班次和休息时间
+     */
+    @Override
+    public List<HrpShiftsVo> queryShiftsAndRestTime(HrpShiftsBo bo) {
+        List<HrpShiftsVo> result = new ArrayList<>();
+        // 1. 查询当前店铺的班次集合
+        List<HrpShiftsVo> hrpShiftsVos = queryList(bo);
+        hrpShiftsVos.forEach(hrpShiftsVo -> {
+            // 2. 查询当前班次的休息时间
+            HrpShiftBreaksBo hrpShiftBreaksBo = new HrpShiftBreaksBo();
+            hrpShiftBreaksBo.setShiftId(hrpShiftsVo.getId());
+            List<HrpShiftBreaksVo> hrpShiftBreaksVos = hrpShiftBreaksService.queryList(hrpShiftBreaksBo);
+            hrpShiftsVo.setShiftBreaksList(hrpShiftBreaksVos);
+            result.add(hrpShiftsVo);
+        });
+        return result;
     }
 }

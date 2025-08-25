@@ -40,7 +40,7 @@ public class HrpUserProfileController extends BaseController {
 
 
     /**
-     * 获取指定分店的员工列表及其技能
+     * 获取指定分店的员工信息
      * @param storeId 分店ID
      */
     @GetMapping("/listWithSkills")

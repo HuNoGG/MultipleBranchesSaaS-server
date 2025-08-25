@@ -25,4 +25,12 @@ public interface HrpUserAvailabilityMapper extends BaseMapperPlus<HrpUserAvailab
      */
     List<HrpUserAvailabilityVo> selectVoListByUserIds(@Param("userIds") List<Long> userIds);
 
+    /**
+     * 根据用户ID查询员工可上班时段列表
+     *
+     * @param userId 用户ID
+     * @return 员工可上班时段列表
+     */
+    @Select("select * from hrp_user_availability where user_id = #{userId}")
+    List<HrpUserAvailabilityVo> queryListWithUserAvailabilityByUserId(@Param("userId") Long userId);
 }

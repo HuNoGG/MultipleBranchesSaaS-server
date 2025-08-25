@@ -45,6 +45,16 @@ public class HrpShiftsController extends BaseController {
         return hrpShiftsService.queryPageList(bo, pageQuery);
     }
 
+
+    /**
+     * 查询当前班次设定与休息时间
+     */
+    @SaCheckPermission("hrp:shifts:list")
+    @GetMapping("/shiftsAndRestTime")
+    public R<List<HrpShiftsVo>> shiftsAndRestTime(HrpShiftsBo bo) {
+        return R.ok(hrpShiftsService.queryShiftsAndRestTime(bo));
+    }
+
     /**
      * 导出班别设定列表
      */

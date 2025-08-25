@@ -132,4 +132,14 @@ public class HrpUserAvailabilityServiceImpl implements IHrpUserAvailabilityServi
         }
         return baseMapper.deleteByIds(ids) > 0;
     }
+    /**
+     * 根据用户ID查询员工可上班时段列表
+     *
+     * @param userId 用户ID
+     * @return 员工可上班时段列表
+     */
+    @Override
+    public List<HrpUserAvailabilityVo> queryListWithUserAvailabilityByUserId(Long userId) {
+        return baseMapper.queryListWithUserAvailabilityByUserId(userId);
+    }
 }

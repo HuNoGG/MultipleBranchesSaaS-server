@@ -1,5 +1,6 @@
 package org.dromara.hrp.service;
 
+import org.dromara.hrp.domain.dto.StoreSkillDto;
 import org.dromara.hrp.domain.vo.HrpSkillsVo;
 import org.dromara.hrp.domain.bo.HrpSkillsBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -72,4 +73,11 @@ public interface IHrpSkillsService {
      * @return
      */
     List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId);
+
+    /**
+     * 查询所有门店的技能岗位列表
+     * @param bo
+     * @return
+     */
+    List<StoreSkillDto> queryStoreList(HrpSkillsBo bo);
 }

@@ -46,13 +46,14 @@ public class HrpShiftBreaksVo implements Serializable {
      * 休息开始时间
      */
     @ExcelProperty(value = "休息开始时间")
+    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
     private Date breakStartTime;
 
     /**
      * 休息结束时间
      */
     @ExcelProperty(value = "休息结束时间")
+    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
     private Date breakEndTime;
-
 
 }

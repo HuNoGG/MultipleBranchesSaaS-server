@@ -42,5 +42,10 @@ public class HrpSkills extends BaseEntity {
      */
     private String remark;
 
+    /**
+     * 所属店铺id
+     */
+    private Long storeId;
+
 
 }
