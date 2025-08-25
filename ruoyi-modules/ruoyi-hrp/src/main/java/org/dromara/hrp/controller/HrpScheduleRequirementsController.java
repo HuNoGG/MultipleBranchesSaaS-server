@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.hrp.domain.dto.AllRequirementsDto;
+import org.dromara.hrp.domain.dto.DailyRequirementsDto;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -44,6 +46,31 @@ public class HrpScheduleRequirementsController extends BaseController {
     public TableDataInfo<HrpScheduleRequirementsVo> list(HrpScheduleRequirementsBo bo, PageQuery pageQuery) {
         return hrpScheduleRequirementsService.queryPageList(bo, pageQuery);
     }
+
+    /**
+     * 保存每日人力需求 (平日或假日)
+     * @param dto 包含店铺、日期类型和需求矩阵的数据
+     */
+    @SaCheckPermission("hrp:scheduleRequirements:edit") // 复用编辑权限
+    @Log(title = "保存每日人力需求", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PostMapping("/save")
+    public R<Void> saveRequirements(@Validated @RequestBody DailyRequirementsDto dto) {
+        hrpScheduleRequirementsService.saveRequirements(dto);
+        return R.ok();
+    }
+
+    /**
+     * 根据店铺ID查询所有类型（平日、假日、特殊）的每日人力需求
+     * @param storeId 店铺ID
+     */
+    @SaCheckPermission("hrp:scheduleRequirements:list") // 复用查询权限
+    @GetMapping("/all-by-store")
+    public R<AllRequirementsDto> getAllRequirementsByStoreId(@RequestParam @NotNull Long storeId) {
+        AllRequirementsDto result = hrpScheduleRequirementsService.getAllRequirementsByStoreId(storeId);
+        return R.ok(result);
+    }
+
 
     /**
      * 导出每日人力需求列表

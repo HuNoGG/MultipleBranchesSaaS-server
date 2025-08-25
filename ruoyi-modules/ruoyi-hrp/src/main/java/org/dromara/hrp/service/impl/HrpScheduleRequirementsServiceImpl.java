@@ -9,16 +9,21 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.hrp.domain.dto.AllRequirementsDto;
+import org.dromara.hrp.domain.dto.DailyRequirementsDto;
 import org.springframework.stereotype.Service;
 import org.dromara.hrp.domain.bo.HrpScheduleRequirementsBo;
 import org.dromara.hrp.domain.vo.HrpScheduleRequirementsVo;
 import org.dromara.hrp.domain.HrpScheduleRequirements;
 import org.dromara.hrp.mapper.HrpScheduleRequirementsMapper;
 import org.dromara.hrp.service.IHrpScheduleRequirementsService;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
+import java.util.stream.Collectors;
 
 /**
  * 每日人力需求Service业务层处理
@@ -133,5 +138,60 @@ public class HrpScheduleRequirementsServiceImpl implements IHrpScheduleRequireme
             //TODO 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteByIds(ids) > 0;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveRequirements(DailyRequirementsDto dto) {
+        Long storeId = dto.getStoreId();
+        String dayType = dto.getDayType();
+
+        // 1. 先删除该店铺、该日期类型下所有旧的人力需求配置
+        baseMapper.delete(new LambdaQueryWrapper<HrpScheduleRequirements>()
+            .eq(HrpScheduleRequirements::getStoreId, storeId)
+            .eq(HrpScheduleRequirements::getDayType, dayType));
+
+        // 2. 准备要插入的新数据
+        List<HrpScheduleRequirements> newRequirements = new ArrayList<>();
+        if (dto.getRequirements() != null) {
+            for (DailyRequirementsDto.RequirementItem item : dto.getRequirements()) {
+                // 只保存需求数量大于0的记录
+                if (item.getCount() != null && item.getCount() > 0) {
+                    HrpScheduleRequirements req = new HrpScheduleRequirements();
+                    req.setStoreId(storeId);
+                    req.setDayType(dayType);
+                    req.setShiftId(item.getShiftId());
+                    req.setSkillId(item.getSkillId());
+                    req.setRequiredCount(item.getCount().longValue());
+                    newRequirements.add(req);
+                }
+            }
+        }
+
+        // 3. 批量插入新的需求配置
+        if (!newRequirements.isEmpty()) {
+            baseMapper.insertBatch(newRequirements);
+        }
+    }
+
+    @Override
+    public AllRequirementsDto getAllRequirementsByStoreId(Long storeId) {
+        // 1. 一次性查询出该店铺下的所有需求记录
+        List<HrpScheduleRequirementsVo> allReqs = baseMapper.selectVoList(
+            new LambdaQueryWrapper<HrpScheduleRequirements>()
+                .eq(HrpScheduleRequirements::getStoreId, storeId)
+        );
+
+        // 2. 使用Java Stream API按 dayType 进行分组
+        Map<String, List<HrpScheduleRequirementsVo>> groupedByType = allReqs.stream()
+            .collect(Collectors.groupingBy(HrpScheduleRequirementsVo::getDayType));
+
+        // 3. 创建DTO并填充数据
+        AllRequirementsDto dto = new AllRequirementsDto();
+        dto.setWeekday(groupedByType.getOrDefault("weekday", new ArrayList<>()));
+        dto.setHoliday(groupedByType.getOrDefault("holiday", new ArrayList<>()));
+        dto.setSpecial(groupedByType.getOrDefault("special", new ArrayList<>()));
+
+        return dto;
     }
 }

@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.hrp.domain.dto.BasicSettingsDto;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -111,5 +112,18 @@ public class HrpShiftsController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
         return toAjax(hrpShiftsService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    /**
+     * 保存基本设定（包含班次、休息时间等）
+     * @param dto 包含所有基本设定的数据传输对象
+     */
+    @SaCheckPermission("hrp:shifts:edit") // 复用编辑权限
+    @Log(title = "保存基本设定", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PostMapping("/saveBasicSettings")
+    public R<Void> saveBasicSettings(@Validated @RequestBody BasicSettingsDto dto) {
+        hrpShiftsService.saveShiftsAndSettings(dto);
+        return R.ok();
     }
 }

@@ -1,5 +1,6 @@
 package org.dromara.hrp.service;
 
+import org.dromara.hrp.domain.dto.BasicSettingsDto;
 import org.dromara.hrp.domain.vo.HrpShiftsVo;
 import org.dromara.hrp.domain.bo.HrpShiftsBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -72,4 +73,9 @@ public interface IHrpShiftsService {
      * @return 班次和休息时间
      */
     List<HrpShiftsVo> queryShiftsAndRestTime(HrpShiftsBo bo);
+    /**
+     * 保存基本设定，包含对班次和休息时间的增删改
+     * @param dto 包含所有基本设定的数据传输对象
+     */
+    void saveShiftsAndSettings(BasicSettingsDto dto);
 }

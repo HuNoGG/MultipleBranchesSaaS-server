@@ -1,5 +1,8 @@
 package org.dromara.hrp.service;
 
+import jakarta.validation.constraints.NotNull;
+import org.dromara.hrp.domain.dto.AllRequirementsDto;
+import org.dromara.hrp.domain.dto.DailyRequirementsDto;
 import org.dromara.hrp.domain.vo.HrpScheduleRequirementsVo;
 import org.dromara.hrp.domain.bo.HrpScheduleRequirementsBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -65,4 +68,16 @@ public interface IHrpScheduleRequirementsService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    /**
+     * 保存每日人力需求
+     * @param dto 包含需求配置的数据
+     */
+    void saveRequirements(DailyRequirementsDto dto);
+    /**
+     * 根据店铺ID获取所有类型的人力需求
+     * @param storeId 店铺ID
+     * @return 包含所有类型需求的DTO
+     */
+    AllRequirementsDto getAllRequirementsByStoreId(@NotNull Long storeId);
 }

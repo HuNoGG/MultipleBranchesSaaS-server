@@ -1,5 +1,6 @@
 package org.dromara.hrp.service.impl;
 
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -9,8 +10,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.hrp.domain.HrpScheduleRequirements;
+import org.dromara.hrp.domain.HrpShiftBreaks;
+import org.dromara.hrp.domain.HrpStores;
 import org.dromara.hrp.domain.bo.HrpShiftBreaksBo;
+import org.dromara.hrp.domain.dto.BasicSettingsDto;
 import org.dromara.hrp.domain.vo.HrpShiftBreaksVo;
+import org.dromara.hrp.mapper.HrpScheduleRequirementsMapper;
+import org.dromara.hrp.mapper.HrpShiftBreaksMapper;
+import org.dromara.hrp.mapper.HrpStoresMapper;
 import org.dromara.hrp.service.IHrpShiftBreaksService;
 import org.springframework.stereotype.Service;
 import org.dromara.hrp.domain.bo.HrpShiftsBo;
@@ -18,7 +26,9 @@ import org.dromara.hrp.domain.vo.HrpShiftsVo;
 import org.dromara.hrp.domain.HrpShifts;
 import org.dromara.hrp.mapper.HrpShiftsMapper;
 import org.dromara.hrp.service.IHrpShiftsService;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.text.SimpleDateFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -39,6 +49,9 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
 
     private final HrpShiftsMapper baseMapper;
     private final IHrpShiftBreaksService hrpShiftBreaksService;
+    private final HrpShiftBreaksMapper shiftBreaksMapper;
+    private final HrpStoresMapper storesMapper;
+    private final HrpScheduleRequirementsMapper scheduleRequirementsMapper;
 
     /**
      * 查询班别设定
@@ -137,11 +150,24 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
      * @return 是否删除成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
-        if(isValid){
-            //TODO 做一些业务上的校验,判断是否需要校验
+        if (ids == null || ids.isEmpty()) {
+            return true;
         }
-        return baseMapper.deleteByIds(ids) > 0;
+        if(isValid){
+            //TODO 未来可在此处做一些业务校验，例如检查是否有关联的“已发布”排班记录
+        }
+        // 1. 删除与这些班次相关联的所有人力需求
+        scheduleRequirementsMapper.delete(new LambdaQueryWrapper<HrpScheduleRequirements>()
+            .in(HrpScheduleRequirements::getShiftId, ids));
+
+        // 2. 删除与这些班次相关联的所有休息时间
+        shiftBreaksMapper.delete(new LambdaQueryWrapper<HrpShiftBreaks>()
+            .in(HrpShiftBreaks::getShiftId, ids));
+
+        // 3. 最后删除班次本身
+        return baseMapper.deleteBatchIds(ids) > 0;
     }
 
     /**
@@ -163,5 +189,66 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
             result.add(hrpShiftsVo);
         });
         return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveShiftsAndSettings(BasicSettingsDto dto) {
+        // 1. 保存其他基础设定 (如跨日规则)
+        HrpStores store = storesMapper.selectById(dto.getStoreId());
+        if (store != null) {
+            store.setCrossDayRule(dto.getCrossDayRule());
+            storesMapper.updateById(store);
+        }
+
+        // 2. 处理班次和休息时间的增删改
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+
+        for (BasicSettingsDto.ShiftDto shiftDto : dto.getShifts()) {
+            HrpShifts shift = new HrpShifts();
+            shift.setName(shiftDto.getName());
+            shift.setCode(shiftDto.getCode());
+            shift.setColorCode(shiftDto.getColor());
+            shift.setIsCrossDay(shiftDto.isCrossDay() ? 1L : 0L);
+            shift.setStoreId(dto.getStoreId());
+            try {
+                shift.setStartTime(sdf.parse(shiftDto.getStartTime()));
+                shift.setEndTime(sdf.parse(shiftDto.getEndTime()));
+            } catch (Exception e) {
+                throw new ServiceException("时间格式错误");
+            }
+
+            // 判断是新增还是更新
+            if (shiftDto.getId() == null || shiftDto.getId() == 0) {
+                // 新增班次
+                baseMapper.insert(shift); // 插入后，shift对象会自动填充ID
+            } else {
+                // 更新班次
+                shift.setId(shiftDto.getId());
+                baseMapper.updateById(shift);
+            }
+
+            // 3. 处理该班次下的休息时间 (采用先删后增的策略，最简单高效)
+            // 先删除该班次所有旧的休息时间
+            shiftBreaksMapper.delete(new LambdaQueryWrapper<HrpShiftBreaks>()
+                .eq(HrpShiftBreaks::getShiftId, shift.getId()));
+
+            // 再插入所有新的休息时间
+            if (shiftDto.getBreakTimes() != null) {
+                for (BasicSettingsDto.BreakDto breakDto : shiftDto.getBreakTimes()) {
+                    if (breakDto.getRange() != null && breakDto.getRange().length == 2) {
+                        HrpShiftBreaks shiftBreak = new HrpShiftBreaks();
+                        shiftBreak.setShiftId(shift.getId());
+                        try {
+                            shiftBreak.setBreakStartTime(sdf.parse(breakDto.getRange()[0]));
+                            shiftBreak.setBreakEndTime(sdf.parse(breakDto.getRange()[1]));
+                        } catch (Exception e) {
+                            throw new ServiceException("休息时间格式错误");
+                        }
+                        shiftBreaksMapper.insert(shiftBreak);
+                    }
+                }
+            }
+        }
     }
 }
