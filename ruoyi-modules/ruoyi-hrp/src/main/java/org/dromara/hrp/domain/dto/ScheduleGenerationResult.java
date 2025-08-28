@@ -18,7 +18,7 @@ public class ScheduleGenerationResult implements Serializable {
     private List<HrpSchedules> schedules;
 
     /**
-     * 执行过程中的反馈信息 (警告或错误)
+     * 执行过程中的结构化反馈信息
      */
-    private List<String> feedbackMessages;
+    private List<FeedbackItem> feedbackItems;
 }

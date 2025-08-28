@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 排班计划 视图传输对象
- * 用于向前端返回格式化的排班数据
+ * 排班计划生成 视图传输对象
+ * 用于从前端接收生成排班任务所需的所有参数
+ * @Author Gemini AI Assistant
+ * @Version 2.1
  */
 @Data
 public class ScheduleGenerateDto implements Serializable {
@@ -25,7 +27,14 @@ public class ScheduleGenerateDto implements Serializable {
     private LocalDate endDate;
 
     /**
-     * 参与排班的员工列表
+     * 新增：排班模式
+     * 用于指定算法在选择员工时的策略
+     * 可选值: "PRIORITY" (优先模式), "AVERAGE" (平均模式)
+     */
+    private String schedulingMode;
+
+    /**
+     * 参与排班的员工列表及其特殊配置
      */
     private List<EmployeeConfig> employees;
 
@@ -41,6 +50,10 @@ public class ScheduleGenerateDto implements Serializable {
     @Data
     public static class EmployeeConfig {
         private Long id;
-        private List<String> daysOff; // 休息日 ["周一", "周二"]
+        /**
+         * 员工的固定休息日
+         * 格式: ["星期一 (8.26)", "星期二 (8.27)"]
+         */
+        private List<String> daysOff;
     }
 }
