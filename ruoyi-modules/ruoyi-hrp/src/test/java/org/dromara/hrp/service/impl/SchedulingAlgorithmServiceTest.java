@@ -127,7 +127,7 @@ class SchedulingAlgorithmServiceTest {
         shiftReqs.put("出锅", 1);
         shiftReqs.put("外场", 1);
         requirements.put("10:00-18:00", shiftReqs);
-        dto.setRequirements(requirements);
+//        dto.setRequirements(requirements);
 
         // --- 3. 执行算法 ---
         ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
@@ -164,7 +164,7 @@ class SchedulingAlgorithmServiceTest {
         shiftReqs.put("出锅", 1);
         shiftReqs.put("带位", 1); // 这个岗位将会缺人
         requirements.put("10:00-18:00", shiftReqs);
-        dto.setRequirements(requirements);
+//        dto.setRequirements(requirements);
 
         // --- 3. 执行 ---
         ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
@@ -209,7 +209,7 @@ class SchedulingAlgorithmServiceTest {
             createEmployeeConfig(2L, Collections.emptyList()),
             createEmployeeConfig(3L, Collections.emptyList())
         ));
-        dto.setRequirements(new HashMap<>());
+//        dto.setRequirements(new HashMap<>());
 
         // --- 3. 执行 ---
         ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
@@ -258,7 +258,7 @@ class SchedulingAlgorithmServiceTest {
         Map<String, Integer> shiftReqs = new HashMap<>();
         shiftReqs.put("出锅", 1);
         requirements.put("10:00-19:00", shiftReqs);
-        dto.setRequirements(requirements);
+//        dto.setRequirements(requirements);
 
         // --- 3. 执行 ---
         ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
