@@ -39,21 +39,21 @@ public class ScheduleGenerateDto implements Serializable {
     private List<EmployeeConfig> employees;
 
     /**
-     * 动态岗位需求
-     * 格式: {"09:00-18:00": {"柜台": 1, "外场": 2}}
+     * TODO: #2 按天配置的岗位需求
+     * 数据结构: Map<"YYYY-MM-DD", Map<"HH:mm-HH:mm", Map<"SkillName", Integer>>>
+     * 例如: {"2025-08-25": {"09:00-18:00": {"收银": 2, "出锅": 1}}}
      */
-    private Map<String, Map<String, Integer>> requirements;
+    private Map<String, Map<String, Map<String, Integer>>> requirementsByDay;
 
     /**
-     * 员工配置内部类
+     * TODO: #1 是否为正职员工的休息时段安排替补
      */
+    private Boolean enableRestDaySubstitution;
+
     @Data
-    public static class EmployeeConfig {
+    public static class EmployeeConfig implements Serializable {
+        private static final long serialVersionUID = 1L;
         private Long id;
-        /**
-         * 员工的固定休息日
-         * 格式: ["星期一 (8.26)", "星期二 (8.27)"]
-         */
-        private List<String> daysOff;
+        private List<String> daysOff; // 预设的休息日
     }
 }

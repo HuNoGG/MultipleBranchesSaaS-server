@@ -25,6 +25,6 @@ public class DailyRequirementsDto implements Serializable {
         @NotNull
         private Long skillId;
         @NotNull
-        private Integer count;
+        private Integer requiredCount;
     }
 }

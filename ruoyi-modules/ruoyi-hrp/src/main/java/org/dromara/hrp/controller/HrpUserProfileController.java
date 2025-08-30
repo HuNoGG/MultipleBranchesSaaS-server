@@ -3,10 +3,13 @@ package org.dromara.hrp.controller;
 import java.time.LocalDate;
 import java.util.List;
 
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.hrp.domain.dto.UserProfileExtendedUpdateDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -48,6 +51,20 @@ public class HrpUserProfileController extends BaseController {
         List<HrpUserProfileVo> list = hrpUserProfileService.queryListWithSkillsByStoreId(storeId);
         return R.ok(list);
     }
+
+    /**
+     * 保存用户档案的拓展信息 (技能、可用时间等)
+     *
+     * @param updateDTO 包含用户所有拓展信息的 DTO 对象
+     * @return 操作结果
+     */
+    @Operation(summary = "保存用户档案拓展信息 (技能、可用时间等)")
+    @PutMapping("/saveExtendedInfo")
+    public R<Void> saveExtendedInfo(@Valid @RequestBody UserProfileExtendedUpdateDTO updateDTO) {
+        hrpUserProfileService.saveExtendedInfo(updateDTO);
+        return R.ok();
+    }
+
 
 
     /**

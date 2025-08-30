@@ -38,6 +38,11 @@ public class HrpStores extends TenantEntity {
     private String address;
 
     /**
+     * 联系方式
+     */
+    private String contact;
+
+    /**
      * 跨日工时归属规则(字典: by_shift_start, by_calendar_day)
      */
     private String crossDayRule;

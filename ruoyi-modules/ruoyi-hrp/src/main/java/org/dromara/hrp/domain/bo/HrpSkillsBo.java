@@ -32,15 +32,19 @@ public class HrpSkillsBo extends BaseEntity {
     private String name;
 
     /**
+     * 技能描述
+     */
+    private String description;
+
+
+    /**
      * 状态(0正常1停用)
      */
-    @NotBlank(message = "状态(0正常1停用)不能为空", groups = { AddGroup.class, EditGroup.class })
     private String status;
 
     /**
      * 备注
      */
-    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
     private String remark;
 
     /**

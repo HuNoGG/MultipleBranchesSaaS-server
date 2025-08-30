@@ -1,5 +1,7 @@
 package org.dromara.hrp.service;
 
+import jakarta.validation.Valid;
+import org.dromara.hrp.domain.dto.UserProfileExtendedUpdateDTO;
 import org.dromara.hrp.domain.vo.HrpUserProfileVo;
 import org.dromara.hrp.domain.bo.HrpUserProfileBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -80,5 +82,11 @@ public interface IHrpUserProfileService {
      */
     List<HrpUserProfileVo> queryAvailableSubstitutes(Long storeId, Long skillId, LocalDate scheduleDate, Long originalUserId);
 
-
+    /**
+     * 保存用户档案的拓展信息。
+     * 这是一个事务性操作,会同时更新用户的基本档案、技能关联和可用时间。
+     *
+     * @param updateDTO 包含所有待更新信息的DTO
+     */
+    void saveExtendedInfo(UserProfileExtendedUpdateDTO updateDTO);
 }

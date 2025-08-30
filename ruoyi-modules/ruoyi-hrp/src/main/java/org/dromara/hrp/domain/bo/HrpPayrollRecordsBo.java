@@ -78,19 +78,16 @@ public class HrpPayrollRecordsBo extends BaseEntity {
     /**
      * 是否已确认(TRUE =是,FALSE = 否)
      */
-    @NotNull(message = "是否已确认(TRUE =是,FALSE = 否)不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long isFinalized;
 
     /**
      * 状态(0正常1停用)
      */
-    @NotBlank(message = "状态(0正常1停用)不能为空", groups = { AddGroup.class, EditGroup.class })
     private String status;
 
     /**
      * 备注
      */
-    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
     private String remark;
 
 

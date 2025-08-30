@@ -20,7 +20,7 @@ public class BasicSettingsDto implements Serializable {
         private String startTime;
         private String endTime;
         private boolean isCrossDay;
-        private String color;
+        private String colorCode;
         private List<BreakDto> breakTimes;
     }
 

@@ -156,13 +156,13 @@ public class HrpScheduleRequirementsServiceImpl implements IHrpScheduleRequireme
         if (dto.getRequirements() != null) {
             for (DailyRequirementsDto.RequirementItem item : dto.getRequirements()) {
                 // 只保存需求数量大于0的记录
-                if (item.getCount() != null && item.getCount() > 0) {
+                if (item.getRequiredCount() != null && item.getRequiredCount() > 0) {
                     HrpScheduleRequirements req = new HrpScheduleRequirements();
                     req.setStoreId(storeId);
                     req.setDayType(dayType);
                     req.setShiftId(item.getShiftId());
                     req.setSkillId(item.getSkillId());
-                    req.setRequiredCount(item.getCount().longValue());
+                    req.setRequiredCount(item.getRequiredCount().longValue());
                     newRequirements.add(req);
                 }
             }

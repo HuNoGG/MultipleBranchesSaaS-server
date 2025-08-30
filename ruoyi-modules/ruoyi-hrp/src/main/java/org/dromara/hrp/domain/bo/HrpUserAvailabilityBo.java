@@ -37,7 +37,8 @@ public class HrpUserAvailabilityBo extends BaseEntity {
      * 星期几 (1=周一, 2=周二, ..., 7=周日)
      */
     @NotNull(message = "星期几 (1=周一, 2=周二, ..., 7=周日)不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long dayOfWeek;
+    private Integer dayOfWeek;
+
 
     /**
      * 可上班的开始时间

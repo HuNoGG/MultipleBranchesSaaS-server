@@ -1,5 +1,7 @@
 package org.dromara.hrp.domain.bo;
 
+import org.dromara.common.translation.annotation.Translation;
+import org.dromara.common.translation.constant.TransConstant;
 import org.dromara.hrp.domain.HrpStores;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 import org.dromara.common.core.validate.AddGroup;
@@ -37,6 +39,17 @@ public class HrpStoresBo extends BaseEntity {
     private String address;
 
     /**
+     * 联系方式
+     */
+    private String contact;
+
+    /**
+     * 店长id
+     */
+    private Long manageId;
+
+
+    /**
      * 跨日工时归属规则(字典: by_shift_start, by_calendar_day)
      */
     @NotBlank(message = "跨日工时归属规则(字典: by_shift_start, by_calendar_day)不能为空", groups = { AddGroup.class, EditGroup.class })
@@ -45,13 +58,13 @@ public class HrpStoresBo extends BaseEntity {
     /**
      * 状态(0正常1停用)
      */
-    @NotBlank(message = "状态(0正常1停用)不能为空", groups = { AddGroup.class, EditGroup.class })
+//    @NotBlank(message = "状态(0正常1停用)不能为空", groups = { AddGroup.class, EditGroup.class })
     private String status;
 
     /**
      * 备注
      */
-    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
+//    @NotBlank(message = "备注不能为空", groups = { AddGroup.class, EditGroup.class })
     private String remark;
 
 

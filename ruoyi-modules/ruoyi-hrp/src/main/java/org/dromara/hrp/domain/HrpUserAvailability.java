@@ -37,7 +37,7 @@ public class HrpUserAvailability extends BaseEntity {
     /**
      * 星期几 (1=周一, 2=周二, ..., 7=周日)
      */
-    private Long dayOfWeek;
+    private Integer dayOfWeek;
 
     /**
      * 可上班的开始时间

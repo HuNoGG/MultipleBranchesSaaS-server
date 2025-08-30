@@ -1,5 +1,7 @@
 package org.dromara.hrp.domain.vo;
 
+import org.dromara.common.translation.annotation.Translation;
+import org.dromara.common.translation.constant.TransConstant;
 import org.dromara.hrp.domain.HrpStores;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -39,6 +41,27 @@ public class HrpStoresVo implements Serializable {
      */
     @ExcelProperty(value = "分店名称")
     private String name;
+
+    /**
+     * 店长id
+     */
+    private Long manageId;
+
+    /**
+     * 店长名称
+     */
+    @Translation(type = TransConstant.USER_ID_TO_NICKNAME, mapper = "manageId")
+    private String manageName;
+
+    /**
+     * 联系方式
+     */
+    private String contact;
+
+    /**
+     * 员工数
+     */
+    private Integer employeeCount;
 
     /**
      * 分店地址

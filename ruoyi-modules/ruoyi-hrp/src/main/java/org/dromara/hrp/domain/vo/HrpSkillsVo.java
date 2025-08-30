@@ -41,6 +41,13 @@ public class HrpSkillsVo implements Serializable {
     private String name;
 
     /**
+     * 技能描述
+     */
+    private String description;
+
+
+
+    /**
      * 状态(0正常1停用)
      */
     @ExcelProperty(value = "状态(0正常1停用)")
