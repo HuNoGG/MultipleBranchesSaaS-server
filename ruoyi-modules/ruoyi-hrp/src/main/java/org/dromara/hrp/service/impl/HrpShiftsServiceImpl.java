@@ -209,7 +209,7 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
             shift.setName(shiftDto.getName());
             shift.setCode(shiftDto.getCode());
             shift.setColorCode(shiftDto.getColorCode());
-            shift.setIsCrossDay(shiftDto.isCrossDay() ? 1L : 0L);
+            shift.setIsCrossDay(shiftDto.isCrossDay());
             shift.setStoreId(dto.getStoreId());
             try {
                 shift.setStartTime(sdf.parse(shiftDto.getStartTime()));

@@ -57,7 +57,7 @@ public class HrpShifts extends BaseEntity {
     /**
      * 是否跨日(TRUE =是,FALSE =否)
      */
-    private Long isCrossDay;
+    private Boolean isCrossDay;
 
     /**
      * 班表显示颜色(如:#FF5733)

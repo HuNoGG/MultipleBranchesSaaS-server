@@ -58,7 +58,7 @@ public class HrpShiftsBo extends BaseEntity {
      * 是否跨日(TRUE =是,FALSE =否)
      */
     @NotNull(message = "是否跨日(TRUE =是,FALSE =否)不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long isCrossDay;
+    private Boolean isCrossDay;
 
     /**
      * 班表显示颜色(如:#FF5733)

@@ -319,13 +319,12 @@ public class SchedulingAlgorithmService {
             // 循环日期，为该员工寻找合适的班次，直到达到工时目标或没有合适的班次
             for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
                 if (matrix.getTotalHours(employee.getUserId()) >= monthlyHourTarget) {
-                    break; // 工时已满
+                    break;
                 }
-                if (!matrix.isAvailable(employee.getUserId(), currentDate)) {
-                    continue; // 当天不可用
+                if (!matrix.isAvailableForDay(employee.getUserId(), currentDate)) {
+                    continue;
                 }
-
-                // 寻找当天最适合该员工的班次 (这里简化为寻找第一个可上的班次)
+                // TODO: 调整为可以为同一天安排多个班次
                 findAndAssignBestShiftForEmployee(employee, currentDate, matrix, input, schedulingMode);
             }
         }
@@ -335,23 +334,21 @@ public class SchedulingAlgorithmService {
      * 为单个员工在指定日期寻找并安排一个最合适的班次
      */
     private void findAndAssignBestShiftForEmployee(HrpUserProfileVo employee, LocalDate date, ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode) {
-        // 从每日需求中获取当天的需求列表
         final List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(date, Collections.emptyList());
 
-        List<HrpShiftsVo> possibleShifts = input.getShifts().stream()
-            .filter(shift -> {
-                boolean hasMatchingSkill = requirementsForToday.stream()
-                    .anyMatch(req -> req.getShiftId().equals(shift.getId()) &&
-                        input.getUserSkills().getOrDefault(employee.getUserId(), Collections.emptyList()).contains(req.getSkillId()));
-                return hasMatchingSkill &&
-                    matrix.isAvailable(employee.getUserId(), date) &&
-                    isAvailableForShift(employee.getUserId(), date, shift, input) &&
-                    matrix.getConsecutiveWorkDays(employee.getUserId(), date) < MAX_CONSECUTIVE_WORK_DAYS;
-            })
+        // 寻找所有潜在可上的班次
+        List<HrpShiftsVo> possibleShifts = requirementsForToday.stream()
+            .map(req -> input.getShiftsById().get(req.getShiftId()))
+            .filter(Objects::nonNull)
+            .distinct()
+            .filter(shift -> matrix.isTimeRangeAvailable(employee.getUserId(), date, shift) && // 检查时间冲突
+                isAvailableForShift(employee.getUserId(), date, shift, input) &&
+                matrix.getConsecutiveWorkDays(employee.getUserId(), date) < MAX_CONSECUTIVE_WORK_DAYS)
             .collect(Collectors.toList());
 
         if (possibleShifts.isEmpty()) return;
 
+        // 寻找最优班次 (这里简化为需求最紧迫的班次)
         possibleShifts.sort(Comparator.comparingInt((HrpShiftsVo shift) ->
             requirementsForToday.stream()
                 .filter(req -> req.getShiftId().equals(shift.getId()))
@@ -361,6 +358,7 @@ public class SchedulingAlgorithmService {
 
         HrpShiftsVo bestShift = possibleShifts.get(0);
 
+        // 寻找该班次下最缺人的、且该员工能胜任的岗位
         Long skillIdToAssign = requirementsForToday.stream()
             .filter(req -> req.getShiftId().equals(bestShift.getId()) &&
                 input.getUserSkills().getOrDefault(employee.getUserId(), Collections.emptyList()).contains(req.getSkillId()))
@@ -457,7 +455,7 @@ public class SchedulingAlgorithmService {
 
 
     /**
-     * 辅助方法: 寻找指定日期、班次、技能的所有候选人
+     * 辅助方法: 寻找指定日期、班次、技能的所有候选人 (已修改)
      */
     private List<HrpUserProfileVo> findCandidates(LocalDate date, HrpScheduleRequirementsVo req, ScheduleMatrix matrix, AlgorithmInput input) {
         List<HrpUserProfileVo> candidates = new ArrayList<>();
@@ -466,19 +464,20 @@ public class SchedulingAlgorithmService {
 
         for (HrpUserProfileVo employee : input.getEmployees()) {
             Long userId = employee.getUserId();
-            // 检查当天是否可用 (未休假或已排班)
-            if (!matrix.isAvailable(userId, date)) continue;
+            // 检查当天是否被完全锁定 (例如休假)
+            if (!matrix.isAvailableForDay(userId, date)) continue;
+
+            // TODO:  检查该员工在当前班次的时间段内是否有空
+            if (!matrix.isTimeRangeAvailable(userId, date, shift)) continue;
+
             // 检查技能
             if (!input.getUserSkills().getOrDefault(userId, Collections.emptyList()).contains(req.getSkillId())) continue;
             // 检查可用时间段
             if (!isAvailableForShift(userId, date, shift, input)) continue;
             // 检查工作规则 (连续工作日、周工时上限等)
             if (matrix.getConsecutiveWorkDays(userId, date) >= MAX_CONSECUTIVE_WORK_DAYS) continue;
-            // 对计时员工检查周工时上限
             if ("计时".equals(employee.getEmployeeType()) && matrix.getWeeklyHours(userId, date) + matrix.getShiftDuration(shift.getId()) > MAX_WEEKLY_HOURS) continue;
-            // 检查班次连续性规则
             if (!matrix.isValidConsecutiveShift(userId, date, shift.getId())) continue;
-
 
             candidates.add(employee);
         }
@@ -552,16 +551,19 @@ public class SchedulingAlgorithmService {
         schedulesMapper.deleteDraftSchedules(dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
 
         List<HrpSchedules> schedules = new ArrayList<>();
-        for (Map.Entry<String, ScheduleAssignment> entry : matrix.getAssignments().entrySet()) {
-            String[] keyParts = entry.getKey().split(":");
-            HrpSchedules schedule = new HrpSchedules();
-            schedule.setUserId(Long.parseLong(keyParts[0]));
-            schedule.setScheduleDate(LocalDate.parse(keyParts[1]));
-            schedule.setStoreId(dto.getStoreId());
-            schedule.setShiftId(entry.getValue().getShiftId());
-            schedule.setSkillId(entry.getValue().getSkillId());
-            schedule.setStatus("DRAFT"); // 所有新生成的排班都是草稿状态
-            schedules.add(schedule);
+        for (Map.Entry<String, List<ScheduleAssignment>> entry : matrix.getAssignments().entrySet()) {
+            for(ScheduleAssignment assignment : entry.getValue()){
+                String[] keyParts = entry.getKey().split(":");
+                HrpSchedules schedule = new HrpSchedules();
+                schedule.setUserId(Long.parseLong(keyParts[0]));
+                schedule.setScheduleDate(LocalDate.parse(keyParts[1]));
+                schedule.setStoreId(dto.getStoreId());
+                schedule.setShiftId(assignment.getShiftId());
+                schedule.setSkillId(assignment.getSkillId());
+                schedule.setStatus("DRAFT"); // 所有新生成的排班都是草稿状态
+                schedules.add(schedule);
+            }
+
         }
 
         if (!schedules.isEmpty()) {
@@ -643,36 +645,37 @@ public class SchedulingAlgorithmService {
         List<BreakCoverageRequirement> breakReqs = new ArrayList<>();
 
         // 遍历所有已安排的班次
-        for (Map.Entry<String, ScheduleAssignment> entry : matrix.getAssignments().entrySet()) {
+        for (Map.Entry<String, List<ScheduleAssignment>> entry : matrix.getAssignments().entrySet()) {
             String[] keyParts = entry.getKey().split(":");
             Long userId = Long.parseLong(keyParts[0]);
             LocalDate date = LocalDate.parse(keyParts[1]);
-            ScheduleAssignment assignment = entry.getValue();
+            for (ScheduleAssignment assignment : entry.getValue()) {
 
-            // 只为全职员工的长时休息生成替班需求
-            String employeeType = findEmployeeType(userId, input.getEmployees());
-            if (!"全职".equals(employeeType)) {
-                continue;
-            }
-
-            List<HrpShiftBreaksVo> breaks = input.getShiftBreaksByShiftId().get(assignment.getShiftId());
-            if (breaks != null) {
-                for (HrpShiftBreaksVo breakItem : breaks) {
-                    long breakDuration = (breakItem.getBreakEndTime().getTime() - breakItem.getBreakStartTime().getTime()) / (60 * 1000);
-                    if (breakDuration >= BREAK_COVERAGE_THRESHOLD_MINUTES) {
-                        // 创建一个临时的替班需求
-                        breakReqs.add(new BreakCoverageRequirement(
-                            date,
-                            breakItem.getBreakStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime(),
-                            breakItem.getBreakEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime(),
-                            assignment.getSkillId(), // 替班人员需要具备相同的技能
-                            1, // 需求人数为1
-                            false // 初始状态为未满足
-                        ));
-                        log.debug("为员工 {} 在 {} 的休息时段 ({}-{}) 生成了岗位 {} 的替班需求。", userId, date, breakItem.getBreakStartTime(), breakItem.getBreakEndTime(), assignment.getSkillId());
+                // 只为全职员工的长时休息生成替班需求
+                String employeeType = findEmployeeType(userId, input.getEmployees());
+                if (!"全职".equals(employeeType)) {
+                    continue;
+                }
+                List<HrpShiftBreaksVo> breaks = input.getShiftBreaksByShiftId().get(assignment.getShiftId());
+                if (breaks != null) {
+                    for (HrpShiftBreaksVo breakItem : breaks) {
+                        long breakDuration = (breakItem.getBreakEndTime().getTime() - breakItem.getBreakStartTime().getTime()) / (60 * 1000);
+                        if (breakDuration >= BREAK_COVERAGE_THRESHOLD_MINUTES) {
+                            // 创建一个临时的替班需求
+                            breakReqs.add(new BreakCoverageRequirement(
+                                date,
+                                breakItem.getBreakStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime(),
+                                breakItem.getBreakEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime(),
+                                assignment.getSkillId(), // 替班人员需要具备相同的技能
+                                1, // 需求人数为1
+                                false // 初始状态为未满足
+                            ));
+                            log.debug("为员工 {} 在 {} 的休息时段 ({}-{}) 生成了岗位 {} 的替班需求。", userId, date, breakItem.getBreakStartTime(), breakItem.getBreakEndTime(), assignment.getSkillId());
+                        }
                     }
                 }
             }
+
         }
         return breakReqs;
     }
@@ -792,8 +795,8 @@ public class SchedulingAlgorithmService {
      * 用于在内存中进行排班计算和状态跟踪
      */
     private static class ScheduleMatrix {
-        // Key: "userId:yyyy-MM-dd"
-        private final Map<String, ScheduleAssignment> assignments = new HashMap<>();
+        // TODO: #1 Key: "userId:yyyy-MM-dd", Value: 当天所有班次的列表
+        private final Map<String, List<ScheduleAssignment>> assignments = new HashMap<>();
         private final Map<String, String> blockedSlots = new HashMap<>();
         private final Map<Long, Double> totalHours;
         private final Map<Long, HrpShiftsVo> shiftsById;
@@ -807,8 +810,7 @@ public class SchedulingAlgorithmService {
 
         public void assignShift(Long userId, LocalDate date, Long shiftId, Long skillId) {
             String key = userId + ":" + date;
-            assignments.put(key, new ScheduleAssignment(shiftId, skillId));
-            blockedSlots.put(key, "已排班");
+            assignments.computeIfAbsent(key, k -> new ArrayList<>()).add(new ScheduleAssignment(shiftId, skillId));
             totalHours.merge(userId, getShiftDuration(shiftId), Double::sum);
         }
 
@@ -820,12 +822,48 @@ public class SchedulingAlgorithmService {
             return !blockedSlots.containsKey(userId + ":" + date);
         }
 
+        public boolean isAvailableForDay(Long userId, LocalDate date) {
+            return !blockedSlots.containsKey(userId + ":" + date);
+        }
+
+        public boolean isTimeRangeAvailable(Long userId, LocalDate date, HrpShiftsVo newShift) {
+            List<ScheduleAssignment> assigned = assignments.get(userId + ":" + date);
+            if (CollectionUtils.isEmpty(assigned)) {
+                return true; // 当天无任何安排, 肯定可用
+            }
+
+            LocalTime newStart = newShift.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+            LocalTime newEnd = newShift.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+            if (newShift.getIsCrossDay()) newEnd = newEnd.plusHours(24);
+
+            for (ScheduleAssignment assignment : assigned) {
+                HrpShiftsVo existingShift = shiftsById.get(assignment.getShiftId());
+                if (existingShift == null) continue;
+
+                LocalTime existingStart = existingShift.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+                LocalTime existingEnd = existingShift.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+                if (existingShift.getIsCrossDay()) existingEnd = existingEnd.plusHours(24);
+
+                // 核心冲突检测: (StartA < EndB) and (EndA > StartB)
+                if (newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart)) {
+                    return false; // 发现时间重叠, 不可用
+                }
+            }
+            return true; // 没有发现任何时间重叠
+        }
+
         public int getAssignedCount(LocalDate date, Long shiftId, Long skillId) {
-            return (int) assignments.entrySet().stream()
-                .filter(entry -> entry.getKey().endsWith(":" + date))
-                .map(Map.Entry::getValue)
-                .filter(assignment -> assignment.getShiftId().equals(shiftId) && assignment.getSkillId().equals(skillId))
-                .count();
+            int count = 0;
+            for (Map.Entry<String, List<ScheduleAssignment>> entry : assignments.entrySet()) {
+                if (entry.getKey().endsWith(":" + date)) {
+                    for(ScheduleAssignment assignment : entry.getValue()){
+                        if (assignment.getShiftId().equals(shiftId) && assignment.getSkillId().equals(skillId)) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count;
         }
 
         public double getTotalHours(Long userId) {
@@ -837,9 +875,11 @@ public class SchedulingAlgorithmService {
             double weeklyHours = 0;
             for (int i = 0; i < 7; i++) {
                 LocalDate date = weekStart.plusDays(i);
-                ScheduleAssignment assignment = assignments.get(userId + ":" + date);
-                if (assignment != null) {
-                    weeklyHours += getShiftDuration(assignment.getShiftId());
+                List<ScheduleAssignment> assignmentList = assignments.get(userId + ":" + date);
+                if (assignmentList != null) {
+                    for(ScheduleAssignment assignment : assignmentList){
+                        weeklyHours += getShiftDuration(assignment.getShiftId());
+                    }
                 }
             }
             return weeklyHours;
@@ -867,11 +907,17 @@ public class SchedulingAlgorithmService {
         }
 
         public int getSkillAssignedCount(Long userId, Long skillId) {
-            return (int) assignments.entrySet().stream()
-                .filter(e -> e.getKey().startsWith(userId + ":"))
-                .map(Map.Entry::getValue)
-                .filter(a -> skillId == -1L || a.getSkillId().equals(skillId))
-                .count();
+            int count = 0;
+            for (Map.Entry<String, List<ScheduleAssignment>> entry : assignments.entrySet()) {
+                if (entry.getKey().startsWith(userId + ":")) {
+                    for(ScheduleAssignment assignment : entry.getValue()){
+                        if (assignment.getSkillId().equals(skillId)) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count;
         }
 
         /**
@@ -879,19 +925,20 @@ public class SchedulingAlgorithmService {
          * @return true 如果不冲突
          */
         public boolean isValidConsecutiveShift(Long userId, LocalDate date, Long newShiftId) {
-            ScheduleAssignment yesterdayAssignment = assignments.get(userId + ":" + date.minusDays(1));
-            if (yesterdayAssignment == null) {
+            List<ScheduleAssignment> yesterdayAssignmentList = assignments.get(userId + ":" + date.minusDays(1));
+            if (yesterdayAssignmentList == null) {
                 return true; // 前一天没上班，不冲突
             }
 
             // 示例规则：不允许 "打烊班" 之后紧接着上 "早班"
-            HrpShiftsVo yesterdayShift = shiftsById.get(yesterdayAssignment.getShiftId());
-            HrpShiftsVo todayShift = shiftsById.get(newShiftId);
-
-            if (yesterdayShift != null && todayShift != null) {
-                // 这里可以根据班别名称或代码定义冲突规则
-                if (yesterdayShift.getName().contains("打烊") && todayShift.getName().contains("早")) {
-                    return false; // 冲突
+            for(ScheduleAssignment yesterdayAssignment : yesterdayAssignmentList){
+                HrpShiftsVo yesterdayShift = shiftsById.get(yesterdayAssignment.getShiftId());
+                HrpShiftsVo todayShift = shiftsById.get(newShiftId);
+                if (yesterdayShift != null && todayShift != null) {
+                    // 这里可以根据班别名称或代码定义冲突规则
+                    if (yesterdayShift.getName().contains("打烊") && todayShift.getName().contains("早")) {
+                        return false; // 冲突
+                    }
                 }
             }
             return true;
@@ -920,7 +967,7 @@ public class SchedulingAlgorithmService {
             return (durationMillis - breakMillis) / (1000.0 * 60 * 60);
         }
 
-        public Map<String, ScheduleAssignment> getAssignments() {
+        public Map<String, List<ScheduleAssignment>> getAssignments() {
             return this.assignments;
         }
     }
