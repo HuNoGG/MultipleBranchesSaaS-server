@@ -66,9 +66,9 @@ public class UserProfileExtendedUpdateDTO implements Serializable {
     public static class UserAvailabilityDTO implements Serializable {
         private static final long serialVersionUID = 1L;
         /**
-         * 星期几 (例如: 'MONDAY', 'TUESDAY')
+         * 星期几 (例如: 1, 2)
          */
-        private String dayOfWeek;
+        private Integer dayOfWeek;
         /**
          * 开始时间 (格式: "HH:mm")
          */
