@@ -72,7 +72,7 @@ public interface IHrpSkillsService {
      * @param userId
      * @return
      */
-    List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId);
+    List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId,Long storeId);
 
     /**
      * 查询所有门店的技能岗位列表

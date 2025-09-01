@@ -89,7 +89,7 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
             );
             if(!employees.isEmpty()){
                 for (HrpUserProfileVo userProfile : employees) {
-                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId());
+                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId(),storeId);
                     userProfile.setSkills(skillList);
                 }
             }
@@ -183,7 +183,7 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
             employees = userProfileMapper.selectVoList(new LambdaQueryWrapper<HrpUserProfile>().in(HrpUserProfile::getUserId, userIds));
             if(!employees.isEmpty()){
                 for (HrpUserProfileVo userProfile : employees) {
-                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId());
+                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId(),storeId);
                     userProfile.setSkills(skillList);
                 }
             }
@@ -242,7 +242,7 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
             );
             if(!employees.isEmpty()){
                 for (HrpUserProfileVo userProfile : employees) {
-                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId());
+                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId(),storeId);
                     userProfile.setSkills(skillList);
                 }
             }

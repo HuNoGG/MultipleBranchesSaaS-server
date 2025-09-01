@@ -164,7 +164,7 @@ public class HrpUserProfileServiceImpl implements IHrpUserProfileService {
         List<HrpUserProfileVo> userProfileList = baseMapper.selectVoListByStoreId(storeId);
         // 2. 遍历员工列表,查询每个员工的技能与可上班时间
         for (HrpUserProfileVo userProfile : userProfileList) {
-            List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId());
+            List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId(),storeId);
             userProfile.setSkills(skillList);
             // 3. 查询每个员工的可上班时间
             List<HrpUserAvailabilityVo> availableTimes = hrpUserAvailabilityService.queryListWithUserAvailabilityByUserId(userProfile.getUserId());

@@ -145,8 +145,8 @@ public class HrpSkillsServiceImpl implements IHrpSkillsService {
      * @return
      */
     @Override
-    public List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId) {
-        return baseMapper.selectVoListWithUserSkillByUserId(userId);
+    public List<HrpSkillsVo> queryListWithUserSkillByUserId(Long userId,Long storeId) {
+        return baseMapper.selectVoListWithUserSkillByUserId(userId,storeId);
     }
 
     /**

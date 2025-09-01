@@ -25,7 +25,7 @@ public interface HrpSkillsMapper extends BaseMapperPlus<HrpSkills, HrpSkillsVo> 
      */
     @Select("select s.* from hrp_skills s " +
             "left join hrp_user_skills us on s.id = us.skill_id " +
-            "where us.user_id = #{userId}")
-    List<HrpSkillsVo> selectVoListWithUserSkillByUserId(Long userId);
+            "where us.user_id = #{userId} and s.store_id=#{storeId}")
+    List<HrpSkillsVo> selectVoListWithUserSkillByUserId(Long userId,Long storeId);
 
 }
