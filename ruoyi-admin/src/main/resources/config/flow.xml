@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow>
+    <!--
+      智能排班流程链 (scheduleChain)
+      定义了从数据准备到最终保存的完整排班步骤。
+      执行顺序:
+      1. dataPrepCmp: 加载并预处理所有需要的数据。
+      2. fullTimeSchedulingCmp: 优先使用全职员工进行排班。
+      3. partTimeSchedulingCmp: 使用兼职员工补充剩余的空缺。
+      4. scheduleValidationCmp: 校验排班结果是否满足所有硬性需求。
+      5. schedulePersistenceCmp: 将最终的排班结果保存到数据库。
+    -->
+    <chain name="scheduleChain">
+        THEN(
+            dataPrepCmp,
+            fullTimeSchedulingCmp,
+            partTimeSchedulingCmp,
+            scheduleValidationCmp,
+            schedulePersistenceCmp
+        );
+    </chain>
+</flow>

@@ -1,6 +1,8 @@
 package org.dromara.hrp.service.impl;
 
 import cn.hutool.core.convert.impl.MapConverter;
+import com.yomahub.liteflow.core.FlowExecutor;
+import com.yomahub.liteflow.flow.LiteflowResponse;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.dromara.common.core.exception.ServiceException;
@@ -15,6 +17,7 @@ import org.dromara.hrp.domain.dto.ScheduleGenerateDto;
 import org.dromara.hrp.domain.dto.ScheduleGenerationResult;
 import org.dromara.hrp.domain.vo.*;
 import org.dromara.hrp.mapper.*;
+import org.dromara.hrp.service.liteflow.context.ScheduleContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,54 +61,28 @@ public class SchedulingAlgorithmService {
     @Autowired private HrpSkillsMapper skillsMapper;
     @Autowired private HrpStoresMapper storesMapper;
     @Autowired private HrpShiftBreaksMapper shiftBreaksMapper;
+    private  FlowExecutor flowExecutor;
 
     /**
      * 智能排班算法主入口
      */
     @Transactional(rollbackFor = Exception.class)
     public ScheduleGenerationResult generateSchedule(ScheduleGenerateDto dto) {
-        List<FeedbackItem> feedbackItems = new ArrayList<>();
-        log.info("智能排班任务启动 V2.1，分店ID: {}, 日期范围: {} to {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
+        // 1. 创建并初始化流程上下文
+        ScheduleContext context = new ScheduleContext();
+        context.setScheduleGenerateDto(dto);
 
-        // 1. 准备算法输入数据
-        AlgorithmInput input = prepareInputData(dto, feedbackItems);
-        if (input.getDailyRequirements().isEmpty()) {
-            log.warn("所有日期的排班需求均为0, 排班任务中止。");
-            feedbackItems.add(FeedbackItem.builder().type(FeedbackItem.FeedbackType.SYSTEM_WARNING).severity(FeedbackItem.Severity.WARNING).message("所有日期的排班需求均为0, 未生成任何排班。").build());
-            return new ScheduleGenerationResult(new ArrayList<>(), feedbackItems);
-        }
+        // 2. 执行LiteFlow排班流程链
+        LiteflowResponse response = flowExecutor.execute2Resp("scheduleChain", null, ScheduleContext.class);
 
-        // 2. 初始化排班矩阵并处理休假
-        ScheduleMatrix matrix = initializeMatrix(input, dto, feedbackItems);
-
-        // 3. 【核心步骤一】优先安排全职员工
-        assignFullTimeEmployees(matrix, input, dto.getSchedulingMode());
-
-        // TODO: #1 根据前端开关决定是否执行休息补替逻辑
-        List<BreakCoverageRequirement> breakRequirements = new ArrayList<>();
-        if (Boolean.TRUE.equals(dto.getEnableRestDaySubstitution())) {
-            log.info("休息时段补替功能已启用。");
-            breakRequirements = generateBreakCoverageRequirements(matrix, input);
-            fillBreakCoverageShifts(breakRequirements, matrix, input, dto.getSchedulingMode());
+        // 3. 根据流程执行结果，构造并返回最终的排班结果
+        if (response.isSuccess()) {
+            log.info("LiteFlow排班流程执行成功。");
+            return new ScheduleGenerationResult(true, "排班成功生成并保存。", response.getContextBean(ScheduleContext.class).getAssignments());
         } else {
-            log.info("休息时段补替功能已禁用。");
-            feedbackItems.add(FeedbackItem.builder().type(FeedbackItem.FeedbackType.SYSTEM_WARNING).severity(FeedbackItem.Severity.WARNING).message("配置提示：本次排班未启用正职员工休息时段补替功能。").build());
+            log.error("LiteFlow排班流程执行失败。", response.getException());
+            return new ScheduleGenerationResult(false, "排班生成失败：" + response.getMessage(), null);
         }
-
-        // 5. 【核心步骤三】填补常规班次的剩余缺口
-        fillRemainingShifts(matrix, input, dto.getSchedulingMode());
-
-        // 6. 【核心步骤四】为全职员工补足休息日并最终检查
-        finalizeFullTimeSchedules(matrix, input, feedbackItems);
-
-        // 7. 生成并保存结果
-        List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, dto);
-
-        // 8. 生成结构化的缺口报告
-        generateUnsatisfiedRequirementsReport(matrix, input, breakRequirements, feedbackItems);
-
-        log.info("智能排班任务完成，共生成 {} 条排班记录。", generatedSchedules.size());
-        return new ScheduleGenerationResult(generatedSchedules, feedbackItems);
     }
 
     /**
