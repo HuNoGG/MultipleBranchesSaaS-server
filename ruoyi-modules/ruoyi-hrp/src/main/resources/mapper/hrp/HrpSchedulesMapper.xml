@@ -11,6 +11,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="shiftId" column="shift_id"/>
         <result property="skillId" column="skill_id"/>
         <result property="scheduleDate" column="schedule_date"/>
+        <result property="colorCode" column="color_code"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="remark" column="remark"/>
         <result property="version" column="version"/>
         <result property="status" column="status"/>
         <!-- 关联查询的字段 -->
@@ -19,14 +23,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="shiftCode" column="shift_code"/>
         <result property="shiftStartTime" column="shift_start_time"/>
         <result property="shiftEndTime" column="shift_end_time"/>
-<!--        <result property="shiftColorCode" column="shift_color_code"/>-->
+        <result property="shiftColorCode" column="shift_color_code"/>
         <result property="skillName" column="skill_name"/>
         <!-- 历史记录特有字段 -->
         <result property="attendanceStatus" column="attendance_status"/>
     </resultMap>
 
     <sql id="selectHrpSchedulesVo">
-        select s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status, -- 查询 status 字段
+        select s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status, s.remark, s.color_code,
+               s.start_time, s.end_time,
                u.nick_name as user_name,
                sh.name as shift_name,
                sh.code as shift_code,
@@ -48,6 +53,40 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND schedule_date BETWEEN #{startDate} AND #{endDate}
           AND status = 'DRAFT'
     </update>
+
+    <select id="selectRegularScheduleList" resultMap="HrpSchedulesResult">
+        select
+            s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.status, s.remark,
+            s.start_time, s.end_time, -- 确保查询了时间字段
+            u.user_name,
+            sh.name as shift_name,
+            sh.color_code,
+            sk.name as skill_name
+        from hrp_schedules s
+                 left join sys_user u on s.user_id = u.user_id
+                 left join hrp_shifts sh on s.shift_id = sh.id
+                 left join hrp_skills sk on s.skill_id = sk.id
+        where s.store_id = #{storeId}
+          and s.schedule_date between #{startDate} and #{endDate}
+          and s.shift_id IS NOT NULL -- 核心条件：只查询完整班次
+    </select>
+
+    <select id="selectBreakCoverageScheduleList" resultMap="HrpSchedulesResult">
+        select
+            s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.status, s.remark,
+            s.start_time, s.end_time, -- 确保查询了时间字段
+            u.user_name,
+            null as shift_name,    -- 替班没有班次名称
+            null as color_code,    -- 替班没有班次颜色
+            sk.name as skill_name
+        from hrp_schedules s
+                 left join sys_user u on s.user_id = u.user_id
+                 left join hrp_skills sk on s.skill_id = sk.id
+        where s.store_id = #{storeId}
+          and s.schedule_date between #{startDate} and #{endDate}
+          and s.shift_id IS NULL -- 核心条件：只查询替班记录
+    </select>
+
     <select id="selectSchedulePlanList" resultMap="HrpSchedulesResult">
         <include refid="selectHrpSchedulesVo"/>
         where s.store_id = #{storeId}
@@ -57,7 +96,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectScheduleHistoryList" resultMap="HrpSchedulesResult">
         SELECT
-            s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version,
+            s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status, s.remark,
             u.user_name AS user_name,
             sh.name AS shift_name,
             sh.code AS shift_code,
@@ -99,15 +138,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：批量插入排班记录 -->
     <insert id="insertBatch">
-        INSERT INTO hrp_schedules (user_id, store_id, shift_id, skill_id, schedule_date, version, status, start_time, end_time) VALUES
+        INSERT INTO hrp_schedules (user_id, store_id, shift_id, skill_id, schedule_date, version, status, start_time, end_time, remark) VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.userId}, #{item.storeId}, #{item.shiftId}, #{item.skillId}, #{item.scheduleDate}, #{item.version}, #{item.status}, #{item.startTime}, #{item.endTime})
+            (#{item.userId}, #{item.storeId}, #{item.shiftId}, #{item.skillId}, #{item.scheduleDate}, #{item.version}, #{item.status}, #{item.startTime}, #{item.endTime}, #{item.remark})
         </foreach>
     </insert>
 
     <select id="selectScheduleHistoryBatch" resultMap="HrpSchedulesResult">
         SELECT
-        s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status,
+        s.id, s.user_id, s.store_id, s.shift_id, s.skill_id, s.schedule_date, s.version, s.status, s.remark,
         u.user_name AS user_name,
         sh.name AS shift_name,
         sh.code AS shift_code,

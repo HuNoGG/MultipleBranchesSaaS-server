@@ -22,10 +22,6 @@ public interface IHrpSchedulesService {
 
 
 
-    /**
-     * 查询排班计划
-     */
-    SchedulePlanDto getSchedulePlan(Long storeId, String startDate, String endDate);
 
     /**
      * 查询排班历史

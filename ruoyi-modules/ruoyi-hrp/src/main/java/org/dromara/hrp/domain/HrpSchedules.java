@@ -77,6 +77,8 @@ public class HrpSchedules extends BaseEntity {
      */
     private String status;
 
+    private String remark;
+
 
 
 }
