@@ -75,13 +75,30 @@ public class SchedulingAlgorithmService {
         // 2. 执行LiteFlow排班流程链
         LiteflowResponse response = flowExecutor.execute2Resp("scheduleChain", null, ScheduleContext.class);
 
-        // 3. 根据流程执行结果，构造并返回最终的排班结果
         if (response.isSuccess()) {
             log.info("LiteFlow排班流程执行成功。");
-            return new ScheduleGenerationResult(true, "排班成功生成并保存。", response.getContextBean(ScheduleContext.class).getAssignments());
+            ScheduleGenerationResult context = response.getContextBean(ScheduleGenerationResult.class);
+
+            // 从上下文中获取持久化组件存入的排班列表和校验组件存入的反馈信息
+            List<HrpSchedules> finalSchedules = context.getSchedules();
+            List<FeedbackItem> feedbackItems = context.getFeedbackItems(); // 假设校验组件会设置此信息
+
+            return new ScheduleGenerationResult(finalSchedules, feedbackItems);
         } else {
             log.error("LiteFlow排班流程执行失败。", response.getException());
-            return new ScheduleGenerationResult(false, "排班生成失败：" + response.getMessage(), null);
+            // 失败时也尝试从上下文中获取反馈信息
+            ScheduleGenerationResult context = response.getContextBean(ScheduleGenerationResult.class);
+            List<FeedbackItem> feedbackItems = context.getFeedbackItems();
+            if (feedbackItems == null) {
+                feedbackItems = new ArrayList<>();
+            }
+            // 添加一条表示流程失败的系统消息
+            feedbackItems.add(FeedbackItem.builder()
+                .type(FeedbackItem.FeedbackType.SYSTEM_WARNING)
+                .severity(FeedbackItem.Severity.CRITICAL)
+                .message("排班流程执行失败: " + response.getMessage())
+                .build());
+            return new ScheduleGenerationResult(new ArrayList<>(), feedbackItems);
         }
     }
 
