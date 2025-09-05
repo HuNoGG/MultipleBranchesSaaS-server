@@ -540,18 +540,12 @@ public class SchedulingAlgorithmService {
         Long userId = employee.getUserId();
         List<HrpUserAvailabilityVo> availabilities = input.getUserAvailabilities().get(userId);
 
-        // **核心逻辑: 如果是兼职员工且没有设置任何可用时间，则视为全天可用**
-        // TODO: HrpUserProfileVo 中需要有 employeeType 字段
-        if ("兼职".equals(employee.getEmployeeType()) && CollectionUtils.isEmpty(availabilities)) {
+        //  如果员工（无论正职或兼职）未设置任何可用时间，则视为全天可用
+        if (CollectionUtils.isEmpty(availabilities)) {
             return true;
         }
 
-        // 对于正职或已设置时间的兼职
-        if (CollectionUtils.isEmpty(availabilities)) {
-            return false; // 正职必须有可用时间
-        }
-
-        // 标准时间段匹配逻辑
+        // 如果设置了可用时间，则进行标准时间段匹配
         int dayOfWeek = date.getDayOfWeek().getValue();
         LocalTime shiftStart = shift.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
         LocalTime shiftEnd = shift.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
@@ -561,11 +555,14 @@ public class SchedulingAlgorithmService {
             if (avail.getDayOfWeek() == dayOfWeek) {
                 LocalTime availStart = avail.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
                 LocalTime availEnd = avail.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
+                // 检查班次时间是否完全在可用时间段内
                 if (!shiftStart.isBefore(availStart) && !shiftEnd.isAfter(availEnd)) {
                     return true;
                 }
             }
         }
+
+        // 如果遍历完所有可用时间段都未匹配成功，则视为不可用
         return false;
     }
 
