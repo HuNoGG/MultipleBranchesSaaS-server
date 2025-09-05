@@ -72,112 +72,91 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
     private static final String[] WEEK_DAYS = {"一", "二", "三", "四", "五", "六", "日"};
 
     @Override
-    public SchedulePlanDto getSchedulePlan(Long storeId, String startDate, String endDate) {
-        // 1. 查询时间范围内的所有排班记录 (包含关联表信息)
-        List<HrpSchedulesVo> schedules = baseMapper.selectSchedulePlanList(storeId, startDate, endDate);
-
-        // 2. 获取所有涉及的员工ID
-        Set<Long> userIds = schedules.stream()
-            .map(HrpSchedulesVo::getUserId)
-            .collect(Collectors.toSet());
-
-        List<HrpUserProfileVo> employees = new ArrayList<>();
-        if (!userIds.isEmpty()) {
-            employees = userProfileMapper.selectVoList(
-                new LambdaQueryWrapper<HrpUserProfile>()
-                    .in(HrpUserProfile::getUserId, userIds)
-            );
-            if(!employees.isEmpty()){
-                for (HrpUserProfileVo userProfile : employees) {
-                    List<HrpSkillsVo> skillList = hrpSkillsService.queryListWithUserSkillByUserId(userProfile.getUserId(),storeId);
-                    userProfile.setSkills(skillList);
-                }
-            }
-
-        }
-
-        // 3. 按员工ID和日期对排班数据进行分组
-        Map<Long, Map<String, List<HrpSchedulesVo>>> scheduleRows = schedules.stream()
-            .collect(Collectors.groupingBy(
-                HrpSchedulesVo::getUserId,
-                Collectors.groupingBy(
-                    vo -> DateUtil.format(vo.getScheduleDate(), "yyyy-MM-dd")
-                )
-            ));
-
-        // 4. 构建DTO并返回
-        SchedulePlanDto dto = new SchedulePlanDto();
-        dto.setDates(buildDateHeaders(startDate, endDate));
-        dto.setEmployees(employees);
-        dto.setScheduleRows(scheduleRows);
-
-        return dto;
-    }
-
-    @Override
     public WeeklyScheduleDto getWeeklySchedule(Long storeId, String startDate, String endDate) {
         WeeklyScheduleDto weeklyDto = new WeeklyScheduleDto();
 
-        // 1. 查询该时间范围内的所有排班记录
-        List<HrpSchedulesVo> schedules = baseMapper.selectSchedulePlanList(storeId, startDate, endDate);
+        // 1. 【问题修复】: 分别调用新的Mapper方法查询完整班次和替班时段
+        List<HrpSchedulesVo> regularSchedules = baseMapper.selectRegularScheduleList(storeId, startDate, endDate);
+        List<HrpSchedulesVo> breakCoverageSchedules = baseMapper.selectBreakCoverageScheduleList(storeId, startDate, endDate);
 
-        // 2. 判断排班状态
-        String scheduleStatus = "DRAFT"; // 默认为草稿
-        if (!schedules.isEmpty() && "PUBLISHED".equals(schedules.get(0).getStatus())) {
+        // 2. 合并两种排班记录
+        List<HrpSchedulesVo> allSchedules = new ArrayList<>();
+        allSchedules.addAll(regularSchedules);
+        allSchedules.addAll(breakCoverageSchedules);
+
+        // 3. 判断整体排班状态
+        String scheduleStatus = "DRAFT";
+        if (allSchedules.stream().anyMatch(s -> "PUBLISHED".equals(s.getStatus()))) {
             scheduleStatus = "PUBLISHED";
         }
         weeklyDto.setStatus(scheduleStatus);
 
-        // 如果是已发布状态，则需要关联考勤信息
+        // 4. 如果是已发布状态，需要重新获取包含考勤信息的数据
         if ("PUBLISHED".equals(scheduleStatus)) {
-            schedules = baseMapper.selectScheduleHistoryList(storeId, startDate, endDate);
-        } else {
-            schedules = baseMapper.selectSchedulePlanList(storeId, startDate, endDate);
+            // 注意：selectScheduleHistoryList 应该也包含完整班次和替班时段，这里假设它能查出所有记录
+            allSchedules = new ArrayList<>(baseMapper.selectScheduleHistoryList(storeId, startDate, endDate));
         }
 
+        // 5. 格式化替班记录，为其赋予特殊的显示名称和颜色
+        for (HrpSchedulesVo vo : allSchedules) {
+            // 如果 shiftId 为 null, 则判定为替班记录
+            if (vo.getShiftId() == null) {
+                if (vo.getSkillName() != null) {
+                    vo.setShiftName(vo.getSkillName() + " (替)"); // 例如: "收银 (替)"
+                } else {
+                    vo.setShiftName("替班");
+                }
+                // 【问题修复】: 在此处为替班记录设置一个独特的、醒目的颜色
+                vo.setColorCode("#B39DDB"); // 例如，一个淡紫色
+            }
+        }
+
+        // 6. 【保留逻辑】如果状态为“已发布”，处理“新增临时”的外部人员记录
         if ("PUBLISHED".equals(scheduleStatus)) {
-            // a. 查询所有类型为“新增临时”的修改记录
             LambdaQueryWrapper<HrpScheduleModifications> lqw = Wrappers.lambdaQuery();
             lqw.eq(HrpScheduleModifications::getChangeType, "新增临时");
             List<HrpScheduleModifications> externalMods = modificationsMapper.selectList(lqw);
 
             if (CollUtil.isNotEmpty(externalMods)) {
-                // b. 获取这些修改记录对应的排班ID
                 List<Long> scheduleIds = externalMods.stream()
                     .map(HrpScheduleModifications::getScheduleId)
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
-                // c. 查询这些排班的详细信息（包含班次、技能等）
-                List<HrpSchedulesVo> externalSchedules = baseMapper.selectScheduleHistoryBatch(scheduleIds);
 
-                // d. 将remark信息合并到排班Vo中
-                Map<Long, HrpScheduleModifications> modsMap = externalMods.stream()
-                    .collect(Collectors.toMap(HrpScheduleModifications::getScheduleId, mod -> mod));
+                if (!scheduleIds.isEmpty()) {
+                    List<HrpSchedulesVo> externalSchedules = baseMapper.selectScheduleHistoryBatch(scheduleIds);
+                    Map<Long, HrpScheduleModifications> modsMap = externalMods.stream()
+                        .collect(Collectors.toMap(HrpScheduleModifications::getScheduleId, mod -> mod, (o1, o2) -> o1));
 
-                for (HrpSchedulesVo vo : externalSchedules) {
-                    HrpScheduleModifications mod = modsMap.get(vo.getId());
-                    if (mod != null) {
-                        JSONObject remarkJson = JSONUtil.parseObj(mod.getRemark());
-                        // 使用remark中的信息覆盖vo的默认值
-                        vo.setUserName(remarkJson.getStr("employeeName")); // 外部人员姓名
-                        vo.setAttendanceStatus("增补"); // 直接设置状态为增补
-                        if (remarkJson.getStr("tag") != null) {
-                            vo.setShiftName(vo.getShiftName() + " (" + remarkJson.getStr("tag") + ")");
+                    for (HrpSchedulesVo vo : externalSchedules) {
+                        HrpScheduleModifications mod = modsMap.get(vo.getId());
+                        if (mod != null && mod.getRemark() != null) {
+                            try {
+                                JSONObject remarkJson = JSONUtil.parseObj(mod.getRemark());
+                                vo.setUserName(remarkJson.getStr("employeeName"));
+                                vo.setAttendanceStatus("增补");
+                                if (remarkJson.getStr("tag") != null) {
+                                    vo.setShiftName(vo.getShiftName() + " (" + remarkJson.getStr("tag") + ")");
+                                }
+                            } catch (Exception e) {
+                                log.error("解析临时新增人员的备注信息时出错, 修改记录ID: {}, 备注: {}", mod.getId(), mod.getRemark(), e);
+                            }
                         }
                     }
+                    allSchedules.addAll(externalSchedules);
                 }
-                // e. 将处理过的外部人员排班添加到总列表中
-                schedules.addAll(externalSchedules);
             }
         }
 
-        Map<Long, Map<String, List<HrpSchedulesVo>>> scheduleRows = schedules.stream()
+        // 7. 按员工ID和日期对所有处理过的排班数据进行分组
+        Map<Long, Map<String, List<HrpSchedulesVo>>> scheduleRows = allSchedules.stream()
             .collect(Collectors.groupingBy(
                 HrpSchedulesVo::getUserId,
                 Collectors.groupingBy(vo -> DateUtil.format(vo.getScheduleDate(), "yyyy-MM-dd"))
             ));
 
-        // 3. 组织数据
-        Set<Long> userIds = schedules.stream().map(HrpSchedulesVo::getUserId).collect(Collectors.toSet());
+        // 8. 组织员工信息
+        Set<Long> userIds = allSchedules.stream().map(HrpSchedulesVo::getUserId).collect(Collectors.toSet());
         List<HrpUserProfileVo> employees;
         if (!userIds.isEmpty()) {
             employees = userProfileMapper.selectVoList(new LambdaQueryWrapper<HrpUserProfile>().in(HrpUserProfile::getUserId, userIds));
@@ -188,28 +167,36 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
                 }
             }
         }
-        else
-        {
+        else {
             employees = new ArrayList<>();
         }
-        schedules.stream().filter(schedulesVo -> schedulesVo.getUserId() == 0).forEach(item -> {
-            JSONObject remarkJson = JSONUtil.parseObj(item.getRemark());
-            if(ObjectUtil.isAllEmpty(remarkJson)){
-                return;
+
+        // 9. 【保留逻辑】处理 userId 为 0 的临时员工
+        allSchedules.stream().filter(schedulesVo -> schedulesVo.getUserId() == 0).forEach(item -> {
+            try {
+                JSONObject remarkJson = JSONUtil.parseObj(item.getRemark());
+                if(ObjectUtil.isAllEmpty(remarkJson)) return;
+
+                String externalEmployeeName = remarkJson.getStr("employeeName");
+                if(employees.stream().anyMatch(e -> e.getUserName().equals(externalEmployeeName))) return;
+
+                String position = remarkJson.getStr("position");
+                HrpUserProfileVo externalEmployee = new HrpUserProfileVo();
+                externalEmployee.setUserId(0L);
+                externalEmployee.setMainStoreId(storeId);
+                externalEmployee.setPriorityScore(999L);
+                externalEmployee.setUserName(externalEmployeeName);
+                if (position != null) {
+                    HrpSkillsVo skill = hrpSkillsService.queryById(Long.parseLong(position));
+                    externalEmployee.setSkills(Collections.singletonList(skill));
+                }
+                employees.add(externalEmployee);
+            } catch (Exception e) {
+                log.error("解析临时员工信息时出错, 排班ID: {}, 备注: {}", item.getId(), item.getRemark(), e);
             }
-            String externalEmployeeName = remarkJson.getStr("employeeName");
-            String position = remarkJson.getStr("position");
-            HrpUserProfileVo externalEmployee = new HrpUserProfileVo();
-            externalEmployee.setUserId(0L);
-            externalEmployee.setMainStoreId(storeId);
-            externalEmployee.setPriorityScore(0L);
-            externalEmployee.setUserName(externalEmployeeName);
-            HrpSkillsVo skill = hrpSkillsService.queryById(Long.parseLong(position));
-            externalEmployee.setSkills(Collections.singletonList(skill));
-            employees.add(externalEmployee);
         });
 
-
+        // 10. 构建最终DTO并返回
         weeklyDto.setDates(buildDateHeaders(startDate, endDate));
         weeklyDto.setEmployees(employees);
         weeklyDto.setScheduleRows(scheduleRows);
