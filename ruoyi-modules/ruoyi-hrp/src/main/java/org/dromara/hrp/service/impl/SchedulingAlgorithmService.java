@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -43,8 +44,8 @@ public class SchedulingAlgorithmService {
     // --- 算法可配置参数 (未来应移至数据库或配置中心) ---
     private static final int MAX_CONSECUTIVE_WORK_DAYS = 6;     // 最大连续工作天数
     private static final double MAX_WEEKLY_HOURS = 40.0;        // 计时员工每周最大工时
-    private static final int MAX_FULLTIME_LEAVE_PER_DAY = 2;    // 每日最多允许的全职休假人数
-    private static final int FULL_TIME_MONTHLY_REST_DAYS = 8;   // 全职员工每月最少休息天数
+    private static final int MAX_FULLTIME_LEAVE_PER_DAY = 2;    // 每日最多允许的正职休假人数
+    private static final int FULL_TIME_MONTHLY_REST_DAYS = 8;   // 正职员工每月最少休息天数
     private static final long BREAK_COVERAGE_THRESHOLD_MINUTES = 90; // 超过此分钟数的休息需要安排替班
 
     // --- 依赖注入 ---
@@ -66,9 +67,10 @@ public class SchedulingAlgorithmService {
     @Transactional(rollbackFor = Exception.class)
     public ScheduleGenerationResult generateSchedule(ScheduleGenerateDto dto) {
         List<FeedbackItem> feedbackItems = new ArrayList<>();
-        log.info("智能排班任务启动 V3.2，分店ID: {}, 日期范围: {} to {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate());
+        // 获取排班模式
+        String schedulingMode = StringUtils.hasText(dto.getSchedulingMode()) ? dto.getSchedulingMode() : "PRIORITY"; // 默认为优先模式
+        log.info("智能排班任务启动 V3.4，分店ID: {}, 日期范围: {} to {}, 排班模式: {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate(), schedulingMode);
 
-        // 1. 准备算法所需的所有输入数据
         AlgorithmInput input = prepareInputData(dto, feedbackItems);
         if (input.getDailyRequirements().isEmpty()) {
             feedbackItems.add(FeedbackItem.builder().type(FeedbackItem.FeedbackType.SYSTEM_WARNING).severity(FeedbackItem.Severity.WARNING).message("所有日期的排班需求均为0, 未生成任何排班。").build());
@@ -78,16 +80,16 @@ public class SchedulingAlgorithmService {
         // 2. 初始化排班矩阵并处理休假和固定休息
         ScheduleMatrix matrix = initializeMatrix(input, dto, feedbackItems);
 
-        // 3. 【核心步骤一】优先安排全职员工
-        assignFullTimeEmployees(matrix, input);
+        // 3. 【步骤一】为每个班次分配正职员工
+        assignFullTimeEmployees(matrix, input, schedulingMode);
 
-        // 4. 【核心步骤二：新增】为全职员工的长时休息安排兼职替班
-        List<BreakCoverageRequirement> breakReqs = assignBreakCoverage(matrix, input);
+        // 4. 【步骤二】为每个班次分配休息时间
+        List<BreakCoverageRequirement> breakReqs = assignBreakCoverage(matrix, input, schedulingMode);
 
-        // 5. 【核心步骤三】使用兼职及其他可用员工，补充剩余的完整班次缺口
-        assignPartTimeAndOtherEmployees(matrix, input);
+        // 5. 【步骤三】使用兼职及其他可用员工，补充剩余的完整班次缺口
+        assignPartTimeAndOtherEmployees(matrix, input, schedulingMode);
 
-        // 6. 【最终检查与调整】为全职员工补足休息日
+        // 6. 【最终检查与调整】为正职员工补足休息日
         finalizeFullTimeSchedules(matrix, input, feedbackItems);
 
         // 7. 生成并保存结果
@@ -97,8 +99,7 @@ public class SchedulingAlgorithmService {
         generateUnsatisfiedRequirementsReport(matrix, input, breakReqs, feedbackItems);
 
         log.info("智能排班任务完成，共生成 {} 条排班记录。", generatedSchedules.size());
-        ScheduleGenerationResult scheduleGenerationResult = new ScheduleGenerationResult(generatedSchedules, feedbackItems);
-        return scheduleGenerationResult;
+        return new ScheduleGenerationResult(generatedSchedules, feedbackItems);
     }
 
     /**
@@ -135,23 +136,20 @@ public class SchedulingAlgorithmService {
     }
 
     /**
-     * 【新增】步骤 4: 为全职员工的长时休息安排兼职替班
+     * 步骤 4: 为正职员工的长时休息安排兼职替班
      * @return 返回所有生成的替班需求（无论是否被满足）
      */
-    private List<BreakCoverageRequirement> assignBreakCoverage(ScheduleMatrix matrix, AlgorithmInput input) {
-        log.info("【阶段二】开始为全职员工的长时休息安排替班...");
-        // 1. 生成所有需要被满足的替班需求
+    private List<BreakCoverageRequirement> assignBreakCoverage(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode) {
+        log.info("【阶段二】开始为正职员工的长时休息安排替班...");
         List<BreakCoverageRequirement> breakReqs = generateBreakCoverageRequirements(matrix, input);
 
-        // 2. 遍历每一个替班需求，尝试寻找兼职员工来满足
         for (BreakCoverageRequirement req : breakReqs) {
-            // 只寻找兼职员工
             List<HrpUserProfileVo> candidates = findCandidatesForBreak(req, matrix, input);
             if (!candidates.isEmpty()) {
-                // 选择最优的一个兼职 (这里简化为选择工时最少的)
-                candidates.sort(Comparator.comparingDouble(e -> matrix.getTotalHours(e.getUserId())));
-                HrpUserProfileVo selectedEmployee = candidates.get(0);
-                // 创建 remark 信息
+                //  替班选择也遵循排班模式
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, 1, matrix, req.getSkillId(), schedulingMode);
+                HrpUserProfileVo selectedEmployee = selectedEmployees.get(0);
+
                 Map<String, Object> remarkMap = new HashMap<>();
                 remarkMap.put("type", "BREAK_COVERAGE");
                 remarkMap.put("substitutedUserId", req.getOriginalUserId());
@@ -160,12 +158,8 @@ public class SchedulingAlgorithmService {
                     .findFirst().map(HrpUserProfileVo::getUserName).orElse("未知员工"));
                 String remarkJson = JSONUtil.toJsonStr(remarkMap);
 
-                // 在矩阵中记录这个临时的替班安排
                 matrix.assignBreakCoverage(selectedEmployee.getUserId(), req.getDate(), req.getStartTime(), req.getEndTime(), req.getSkillId(), remarkJson);
-                req.setFulfilled(true); // 标记需求已满足
-                log.debug("替班安排：日期[{}], 时段[{}-{}], 岗位[{}], 分配给兼职员工[{}]", req.getDate(), req.getStartTime(), req.getEndTime(), req.getSkillId(), selectedEmployee.getUserId());
-            } else {
-                log.warn("替班警告：日期[{}], 时段[{}-{}], 岗位[{}] 未找到合适的替班人员。", req.getDate(), req.getStartTime(), req.getEndTime(), req.getSkillId());
+                req.setFulfilled(true);
             }
         }
         return breakReqs;
@@ -232,7 +226,7 @@ public class SchedulingAlgorithmService {
     private ScheduleMatrix initializeMatrix(AlgorithmInput input, ScheduleGenerateDto dto, List<FeedbackItem> feedbackItems) {
         ScheduleMatrix matrix = new ScheduleMatrix(input.getStartDate(), input.getEndDate(), input.getEmployees(), input.getShiftsById(), input.getShiftBreaksByShiftId());
 
-        // 2.1 处理全职员工休假申请冲突
+        // 2.1 处理正职员工休假申请冲突
         handleFullTimeLeaveConflicts(input, feedbackItems);
 
         // 2.2 锁定所有已批准的休假日和前端指定的固定休息日
@@ -252,7 +246,7 @@ public class SchedulingAlgorithmService {
             }
         }
 
-        // 2.3 (预检查) 检查全职员工的休假是否过多，导致无法满足最低工时
+        // 2.3 (预检查) 检查正职员工的休假是否过多，导致无法满足最低工时
         long totalDaysInPeriod = ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()) + 1;
         input.getEmployees().stream()
             .filter(e -> "正职".equals(e.getEmployeeType()))
@@ -261,7 +255,7 @@ public class SchedulingAlgorithmService {
                 long availableWorkDays = totalDaysInPeriod - blockedDays;
 
                 if (availableWorkDays < (totalDaysInPeriod - FULL_TIME_MONTHLY_REST_DAYS)) {
-                    String message = String.format("全职员工 [%s] 的预设休假过多(%d天)，可能无法满足月度最低工时要求。", emp.getUserName(), blockedDays);
+                    String message = String.format("正职员工 [%s] 的预设休假过多(%d天)，可能无法满足月度最低工时要求。", emp.getUserName(), blockedDays);
                     feedbackItems.add(FeedbackItem.builder()
                         .type(FeedbackItem.FeedbackType.CONSTRAINT_VIOLATION)
                         .severity(FeedbackItem.Severity.WARNING)
@@ -289,8 +283,8 @@ public class SchedulingAlgorithmService {
 
 
     /**
-     * 辅助方法: 处理全职员工休假申请冲突。
-     * 如果某一天申请休假的全职员工超过了系统设定的上限 (MAX_FULLTIME_LEAVE_PER_DAY)，
+     * 辅助方法: 处理正职员工休假申请冲突。
+     * 如果某一天申请休假的正职员工超过了系统设定的上限 (MAX_FULLTIME_LEAVE_PER_DAY)，
      * 则会自动进行随机抽签，并将超出部分的员工休假申请标记为“已取消”，同时生成通知。
      *
      * @param input 算法输入数据
@@ -306,7 +300,7 @@ public class SchedulingAlgorithmService {
         fullTimeLeaveMap.forEach((date, requests) -> {
             // 3. 判断当天的申请人数是否超过了上限
             if (requests.size() > MAX_FULLTIME_LEAVE_PER_DAY) {
-                log.warn("日期 [{}] 的全职员工休假申请人数 ({}) 超过上限 ({}), 进行抽签处理...", date, requests.size(), MAX_FULLTIME_LEAVE_PER_DAY);
+                log.warn("日期 [{}] 的正职员工休假申请人数 ({}) 超过上限 ({}), 进行抽签处理...", date, requests.size(), MAX_FULLTIME_LEAVE_PER_DAY);
 
                 // 4. 进行随机抽签（打乱列表顺序）
                 Collections.shuffle(requests);
@@ -319,7 +313,7 @@ public class SchedulingAlgorithmService {
 
                     // 【问题修复】: 此处修改为生成 FeedbackItem 对象作为通知
                     String employeeName = findEmployeeName(deniedRequest.getUserId(), input.getEmployees());
-                    String message = String.format("因超出每日全职休假上限，员工 [%s] 于 %s 的休假申请已被系统自动取消。", employeeName, date);
+                    String message = String.format("因超出每日正职休假上限，员工 [%s] 于 %s 的休假申请已被系统自动取消。", employeeName, date);
 
                     feedbackItems.add(FeedbackItem.builder()
                         .type(FeedbackItem.FeedbackType.SYSTEM_WARNING) // 类型为系统警告/通知
@@ -335,27 +329,24 @@ public class SchedulingAlgorithmService {
     }
 
     /**
-     * 步骤 3: 优先安排全职员工
+     * 步骤 3: 优先安排正职员工
      */
-    private void assignFullTimeEmployees(ScheduleMatrix matrix, AlgorithmInput input) {
-        log.info("【阶段一】开始为全职员工排班...");
+    private void assignFullTimeEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode) {
+        log.info("【阶段一】开始为正职员工排班 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            // 优先处理需求最紧急的岗位
             List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate);
 
             for (HrpScheduleRequirementsVo req : sortedRequirements) {
                 int deficit = req.getRequiredCount() - matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
                 if (deficit <= 0) continue;
 
-                // **只寻找全职员工**
                 List<HrpUserProfileVo> candidates = findCandidatesForRequirement(currentDate, req, matrix, input, "正职");
-                // **根据优先级和工时选择最优的全职员工**
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix);
+                // 【核心修改点】: 根据排班模式选择最优员工
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), schedulingMode);
 
                 for (HrpUserProfileVo employee : selectedEmployees) {
                     matrix.assignShift(employee.getUserId(), currentDate, req.getShiftId(), req.getSkillId());
-                    log.debug("全职排班：日期[{}], 班次[{}], 技能[{}], 分配给员工[{}]", currentDate, req.getShiftId(), req.getSkillId(), employee.getUserId());
                 }
             }
         }
@@ -403,45 +394,12 @@ public class SchedulingAlgorithmService {
     }
 
 
-    /**
-     * 步骤 4: 填补所有剩余的人力缺口
-     */
-    private void fillRemainingShifts(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode) {
-        log.info("开始填补剩余的人力缺口...");
-        long days = ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()) + 1;
-
-        for (int i = 0; i < days; i++) {
-            LocalDate currentDate = input.getStartDate().plusDays(i);
-
-            //直接获取当天的需求, 不再通过 dayType 判断
-            List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirements(requirementsForToday, input); // 对当天的需求排序
-
-            for (HrpScheduleRequirementsVo req : sortedRequirements) {
-                int requiredCount = req.getRequiredCount();
-                int assignedCount = matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
-                int deficit = requiredCount - assignedCount;
-
-                if (deficit <= 0) continue;
-
-                // **只寻找全职员工**
-                List<HrpUserProfileVo> candidates = findCandidatesForRequirement(currentDate, req, matrix, input, "正职");
-                // **根据优先级和工时选择最优的全职员工**
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix);
-
-                for (HrpUserProfileVo employee : selectedEmployees) {
-                    matrix.assignShift(employee.getUserId(), currentDate, req.getShiftId(), req.getSkillId());
-                }
-            }
-        }
-    }
 
     /**
      * 步骤 5: 补充剩余的完整班次缺口
      */
-    private void assignPartTimeAndOtherEmployees(ScheduleMatrix matrix, AlgorithmInput input) {
-        log.info("【阶段三】开始使用兼职及其他员工补充剩余的完整班次缺口...");
-        // 此处逻辑与V3.1版本一致
+    private void assignPartTimeAndOtherEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode) {
+        log.info("【阶段三】开始使用兼职及其他员工补充剩余的完整班次缺口 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
             List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate);
@@ -451,11 +409,11 @@ public class SchedulingAlgorithmService {
                 if (deficit <= 0) continue;
 
                 List<HrpUserProfileVo> candidates = findCandidatesForRequirement(currentDate, req, matrix, input, "兼职");
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix);
+                // 根据排班模式选择最优员工
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), schedulingMode);
 
                 for (HrpUserProfileVo employee : selectedEmployees) {
                     matrix.assignShift(employee.getUserId(), currentDate, req.getShiftId(), req.getSkillId());
-                    log.debug("兼职补充：日期[{}], 班次[{}], 技能[{}], 分配给员工[{}]", currentDate, req.getShiftId(), req.getSkillId(), employee.getUserId());
                 }
             }
         }
@@ -495,7 +453,7 @@ public class SchedulingAlgorithmService {
 
 
     /**
-     * 步骤 5: 为全职员工补足休息日并进行最终检查
+     * 步骤 5: 为正职员工补足休息日并进行最终检查
      * @param matrix 排班矩阵
      * @param input 算法输入数据
      * @param feedbackItems 用于收集反馈信息的列表
@@ -532,7 +490,7 @@ public class SchedulingAlgorithmService {
                 double actualHours = matrix.getTotalHours(emp.getUserId());
 
                 if (actualHours < minPeriodHours) {
-                    String message = String.format("全职员工 [%s] 的最终排班总工时为 %.1f 小时，未达到当前周期最低标准(%.1f小时)。", emp.getUserName(), actualHours, minPeriodHours);
+                    String message = String.format("正职员工 [%s] 的最终排班总工时为 %.1f 小时，未达到当前周期最低标准(%.1f小时)。", emp.getUserName(), actualHours, minPeriodHours);
                     feedbackItems.add(FeedbackItem.builder()
                         .type(FeedbackItem.FeedbackType.CONSTRAINT_VIOLATION)
                         .severity(FeedbackItem.Severity.WARNING)
@@ -588,9 +546,9 @@ public class SchedulingAlgorithmService {
             return true;
         }
 
-        // 对于全职或已设置时间的兼职
+        // 对于正职或已设置时间的兼职
         if (CollectionUtils.isEmpty(availabilities)) {
-            return false; // 全职必须有可用时间
+            return false; // 正职必须有可用时间
         }
 
         // 标准时间段匹配逻辑
@@ -614,13 +572,25 @@ public class SchedulingAlgorithmService {
     /**
      * 辅助方法: 从候选人中选择最优的 N 位 (已重构，加入优先级)
      */
-    private List<HrpUserProfileVo> selectBestCandidates(List<HrpUserProfileVo> candidates, int count, ScheduleMatrix matrix) {
-        // **核心修改点：定义包含优先级的比较器**
-        // 规则: 优先级分数低 -> 总工时少 -> 随机
-        Comparator<HrpUserProfileVo> comparator = Comparator
-            // TODO: HrpUserProfileVo 中需要有 priorityScore 字段, 并且是数值类型, 越小越优先
-            .comparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()))
-            .thenComparingDouble(e -> matrix.getTotalHours(e.getUserId()));
+    private List<HrpUserProfileVo> selectBestCandidates(List<HrpUserProfileVo> candidates, int count, ScheduleMatrix matrix, Long skillId, String schedulingMode) {
+        Comparator<HrpUserProfileVo> comparator;
+
+        switch (schedulingMode) {
+            case "AVERAGE":
+                // 平均分配模式: 总工时 -> 岗位出勤次数 -> 优先分数
+                comparator = Comparator
+                    .comparingDouble((HrpUserProfileVo e) -> matrix.getTotalHours(e.getUserId()))
+                    .thenComparingInt(e -> matrix.getSkillAssignedCount(e.getUserId(), skillId))
+                    .thenComparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
+            case "PRIORITY":
+            default:
+                // 指定优先模式: 优先分数 -> 总工时
+                comparator = Comparator
+                    .comparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparingDouble(e -> matrix.getTotalHours(e.getUserId()));
+                break;
+        }
 
         candidates.sort(comparator);
         return candidates.stream().limit(count).collect(Collectors.toList());
@@ -734,7 +704,7 @@ public class SchedulingAlgorithmService {
     }
 
     /**
-     * 【新增】辅助方法: 为休息时段寻找合适的替班候选人 (通常是兼职)
+     * 辅助方法: 为休息时段寻找合适的替班候选人 (通常是兼职)
      */
     private List<HrpUserProfileVo> findCandidatesForBreak(BreakCoverageRequirement req, ScheduleMatrix matrix, AlgorithmInput input) {
         List<HrpUserProfileVo> candidates = new ArrayList<>();
@@ -753,7 +723,7 @@ public class SchedulingAlgorithmService {
     }
 
     /**
-     * 【新增】辅助方法: 生成所有全职员工长时休息的替班需求
+     * 辅助方法: 生成所有正职员工长时休息的替班需求
      */
     private List<BreakCoverageRequirement> generateBreakCoverageRequirements(ScheduleMatrix matrix, AlgorithmInput input) {
         List<BreakCoverageRequirement> breakReqs = new ArrayList<>();
@@ -896,7 +866,7 @@ public class SchedulingAlgorithmService {
     private static class ScheduleMatrix {
         // TODO: #1 Key: "userId:yyyy-MM-dd", Value: 当天所有班次的列表
         private final Map<String, List<ScheduleAssignment>> assignments = new HashMap<>();
-        /** 【新增】用于存储替班记录 */
+        /** 用于存储替班记录 */
         private final Map<String, List<BreakAssignment>> breakCoverageAssignments = new HashMap<>();
 
         private final Map<String, String> blockedSlots = new HashMap<>();
@@ -1044,6 +1014,16 @@ public class SchedulingAlgorithmService {
             for (Map.Entry<String, List<ScheduleAssignment>> entry : assignments.entrySet()) {
                 if (entry.getKey().startsWith(userId + ":")) {
                     for(ScheduleAssignment assignment : entry.getValue()){
+                        if (assignment.getSkillId().equals(skillId)) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            // 也需要计算替班时段的技能次数
+            for (Map.Entry<String, List<BreakAssignment>> entry : breakCoverageAssignments.entrySet()) {
+                if (entry.getKey().startsWith(userId + ":")) {
+                    for(BreakAssignment assignment : entry.getValue()){
                         if (assignment.getSkillId().equals(skillId)) {
                             count++;
                         }
