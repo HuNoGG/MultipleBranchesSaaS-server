@@ -35,10 +35,10 @@ public class TranslationHandler extends JsonSerializer<Object> implements Contex
 
     @Override
     public void serialize(Object value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
-        if (value instanceof String && StringUtils.isNotBlank((String) value)) {
-            gen.writeObject(value);
-            return;
-        }
+//        if (value instanceof String && StringUtils.isNotBlank((String) value)) {
+//            gen.writeObject(value);
+//            return;
+//        }
         TranslationInterface<?> trans = TRANSLATION_MAPPER.get(translation.type());
         if (ObjectUtil.isNotNull(trans)) {
             // 如果映射字段不为空 则取映射字段的值

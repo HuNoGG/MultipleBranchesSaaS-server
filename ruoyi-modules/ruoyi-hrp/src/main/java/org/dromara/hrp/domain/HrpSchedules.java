@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -55,6 +56,15 @@ public class HrpSchedules extends BaseEntity {
      * 排班日期
      */
     private LocalDate scheduleDate;
+    /**
+     * 排班开始时间
+     */
+    private LocalTime startTime;
+
+    /**
+     * 排班结束时间
+     */
+    private LocalTime endTime;
 
     /**
      * 版本号,用于管理与回溯

@@ -99,9 +99,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：批量插入排班记录 -->
     <insert id="insertBatch">
-        INSERT INTO hrp_schedules (user_id, store_id, shift_id, skill_id, schedule_date, version) VALUES
+        INSERT INTO hrp_schedules (user_id, store_id, shift_id, skill_id, schedule_date, version, status, start_time, end_time) VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.userId}, #{item.storeId}, #{item.shiftId}, #{item.skillId}, #{item.scheduleDate}, #{item.version})
+            (#{item.userId}, #{item.storeId}, #{item.shiftId}, #{item.skillId}, #{item.scheduleDate}, #{item.version}, #{item.status}, #{item.startTime}, #{item.endTime})
         </foreach>
     </insert>
 

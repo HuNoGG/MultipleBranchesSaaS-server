@@ -1,5 +1,7 @@
 package org.dromara.hrp.domain;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
@@ -16,6 +18,8 @@ import java.io.Serial;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("hrp_skills")
+@AllArgsConstructor
+@NoArgsConstructor
 public class HrpSkills extends BaseEntity {
 
     @Serial
@@ -52,6 +56,9 @@ public class HrpSkills extends BaseEntity {
      */
     private Long storeId;
 
-
+    public HrpSkills(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
 
 }

@@ -1,6 +1,8 @@
 package org.dromara.hrp.domain.dto;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -51,6 +53,8 @@ public class ScheduleGenerateDto implements Serializable {
     private Boolean enableRestDaySubstitution;
 
     @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class EmployeeConfig implements Serializable {
         private static final long serialVersionUID = 1L;
         private Long id;
