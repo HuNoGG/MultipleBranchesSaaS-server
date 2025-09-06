@@ -1,20 +1,16 @@
 package org.dromara.hrp.domain.vo;
 
-import java.time.LocalDate;
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import org.dromara.hrp.domain.HrpShifts;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
-import org.dromara.common.excel.annotation.ExcelDictFormat;
-import org.dromara.common.excel.convert.ExcelDictConvert;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
-import org.dromara.hrp.domain.dto.StoreSkillDto;
+import org.dromara.hrp.domain.HrpShifts;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Date;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -59,15 +55,15 @@ public class HrpShiftsVo implements Serializable {
      * 开始时间
      */
     @ExcelProperty(value = "开始时间")
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date startTime;
+    @JsonFormat(pattern = "HH:mm:ss")
+    private LocalTime startTime;
 
     /**
      * 结束时间
      */
     @ExcelProperty(value = "结束时间")
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date endTime;
+    @JsonFormat(pattern = "HH:mm:ss")
+    private LocalTime endTime;
 
     /**
      * 是否跨日(TRUE =是,FALSE =否)
@@ -108,12 +104,12 @@ public class HrpShiftsVo implements Serializable {
         if (startTime == null || endTime == null) {
             return 0.0;
         }
-        long durationMillis = endTime.getTime() - startTime.getTime();
-        // 如果是跨天班次，需要加上24小时的毫秒数
+        long durationMinutes = ChronoUnit.MINUTES.between(startTime, endTime);
+        // 如果是跨天班次，需要加上24小时
         if (Boolean.TRUE.equals(isCrossDay)) {
-            durationMillis += 24 * 60 * 60 * 1000;
+            durationMinutes += 24 * 60;
         }
-        return durationMillis / (1000.0 * 60 * 60);
+        return durationMinutes / 60.0;
     }
 
 }

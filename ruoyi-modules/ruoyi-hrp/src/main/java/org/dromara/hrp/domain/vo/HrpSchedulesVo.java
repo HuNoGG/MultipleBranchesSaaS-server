@@ -1,20 +1,16 @@
 package org.dromara.hrp.domain.vo;
 
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import org.dromara.hrp.domain.HrpSchedules;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
-import org.dromara.common.excel.annotation.ExcelDictFormat;
-import org.dromara.common.excel.convert.ExcelDictConvert;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import org.dromara.hrp.domain.HrpSchedules;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Date;
-
-
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 /**
  * 排班视图对象 hrp_schedules
@@ -64,8 +60,21 @@ public class HrpSchedulesVo implements Serializable {
      * 排班日期
      */
     @ExcelProperty(value = "排班日期")
-    private Date scheduleDate;
+    private LocalDate scheduleDate;
 
+    /**
+     * 排班开始时间
+     */
+    @ExcelProperty(value = "排班开始时间")
+    @JsonFormat(pattern = "HH:mm:ss")
+    private LocalTime startTime;
+
+    /**
+     * 排班结束时间
+     */
+    @ExcelProperty(value = "排班结束时间")
+    @JsonFormat(pattern = "HH:mm:ss")
+    private LocalTime endTime;
 
     /**
      * 排班的发布状态 ('DRAFT', 'PUBLISHED')
@@ -80,15 +89,10 @@ public class HrpSchedulesVo implements Serializable {
     private String shiftCode;
     private String shiftStartTime;
     private String shiftEndTime;
-    private String startTime;
-    private String endTime;
     private String shiftColorCode;
     private String colorCode;
     private String skillName;
     private String attendanceStatus;
     private String remark; // 增补对象Remark
-
-
-
 
 }

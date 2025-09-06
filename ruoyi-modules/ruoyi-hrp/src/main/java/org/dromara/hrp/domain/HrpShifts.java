@@ -1,13 +1,14 @@
 package org.dromara.hrp.domain;
 
-import org.dromara.common.mybatis.core.domain.BaseEntity;
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
 
 import java.io.Serial;
+import java.time.LocalTime;
 
 /**
  * 班别设定对象 hrp_shifts
@@ -47,12 +48,12 @@ public class HrpShifts extends BaseEntity {
     /**
      * 开始时间
      */
-    private Date startTime;
+    private LocalTime startTime;
 
     /**
      * 结束时间
      */
-    private Date endTime;
+    private LocalTime endTime;
 
     /**
      * 是否跨日(TRUE =是,FALSE =否)

@@ -52,6 +52,13 @@ public class ScheduleGenerateDto implements Serializable {
      */
     private Boolean enableRestDaySubstitution;
 
+    /**
+     * 新增：最大连续工作天数
+     * 用于指定员工可以连续工作的最大天数
+     * 默认值为 6
+     */
+    private Integer maxConsecutiveWorkDays;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

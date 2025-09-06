@@ -67,4 +67,8 @@ public interface HrpSchedulesMapper extends BaseMapperPlus<HrpSchedules, HrpSche
     List<HrpSchedulesVo> selectBreakCoverageScheduleList(@Param("storeId") Long storeId,
                                                          @Param("startDate") String startDate,
                                                          @Param("endDate") String endDate);
+
+    List<HrpSchedulesVo> selectWorkDatesForUsersBefore(@Param("userIds") List<Long> userIds,
+                                                       @Param("startDate") LocalDate startDate,
+                                                       @Param("days") int days);
 }

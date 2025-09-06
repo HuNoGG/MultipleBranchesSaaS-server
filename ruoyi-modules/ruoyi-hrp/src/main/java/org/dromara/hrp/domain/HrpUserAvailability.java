@@ -1,13 +1,13 @@
 package org.dromara.hrp.domain;
 
-import org.dromara.common.mybatis.core.domain.BaseEntity;
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
 
 import java.io.Serial;
+import java.time.LocalTime;
 
 /**
  * 员工可上班时段对象 hrp_user_availability
@@ -42,12 +42,12 @@ public class HrpUserAvailability extends BaseEntity {
     /**
      * 可上班的开始时间
      */
-    private Date startTime;
+    private LocalTime startTime;
 
     /**
      * 可上班的结束时间
      */
-    private Date endTime;
+    private LocalTime endTime;
 
 
 }

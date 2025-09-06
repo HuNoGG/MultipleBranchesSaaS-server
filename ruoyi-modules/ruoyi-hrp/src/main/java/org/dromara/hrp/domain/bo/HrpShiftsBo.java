@@ -1,15 +1,16 @@
 package org.dromara.hrp.domain.bo;
 
-import org.dromara.hrp.domain.HrpShifts;
-import org.dromara.common.mybatis.core.domain.BaseEntity;
-import org.dromara.common.core.validate.AddGroup;
-import org.dromara.common.core.validate.EditGroup;
 import io.github.linpeilie.annotations.AutoMapper;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import jakarta.validation.constraints.*;
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import org.dromara.common.core.validate.AddGroup;
+import org.dromara.common.core.validate.EditGroup;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
+import org.dromara.hrp.domain.HrpShifts;
+
+import java.time.LocalTime;
 
 /**
  * 班别设定业务对象 hrp_shifts
@@ -47,12 +48,12 @@ public class HrpShiftsBo extends BaseEntity {
     /**
      * 开始时间
      */
-    private Date startTime;
+    private LocalTime startTime;
 
     /**
      * 结束时间
      */
-    private Date endTime;
+    private LocalTime endTime;
 
     /**
      * 是否跨日(TRUE =是,FALSE =否)

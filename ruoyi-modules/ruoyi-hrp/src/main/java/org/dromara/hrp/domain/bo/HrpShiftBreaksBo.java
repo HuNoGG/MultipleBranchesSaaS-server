@@ -8,7 +8,7 @@ import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
-import java.util.Date;
+import java.time.LocalTime;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 /**
@@ -36,12 +36,12 @@ public class HrpShiftBreaksBo extends BaseEntity {
     /**
      * 休息开始时间
      */
-    private Date breakStartTime;
+    private LocalTime breakStartTime;
 
     /**
      * 休息结束时间
      */
-    private Date breakEndTime;
+    private LocalTime breakEndTime;
 
 
 }

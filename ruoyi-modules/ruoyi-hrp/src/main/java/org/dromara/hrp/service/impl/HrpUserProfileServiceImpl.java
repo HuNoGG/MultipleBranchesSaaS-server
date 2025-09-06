@@ -270,8 +270,8 @@ public class HrpUserProfileServiceImpl implements IHrpUserProfileService {
                 // TODO: 确保 weekDayMap 能正确转换星期字符串到数字, 此处假设 dayOfWeek 为数字
                 // 如果 dayOfWeek 是 "MONDAY" 等字符串, 需要转换
                 availability.setDayOfWeek(dto.getDayOfWeek());
-                availability.setStartTime(DateUtil.parseTime(dto.getStartTime()));
-                availability.setEndTime(DateUtil.parseTime(dto.getEndTime()));
+                availability.setStartTime(LocalTime.parse(dto.getStartTime()));
+                availability.setEndTime(LocalTime.parse(dto.getEndTime()));
                 return availability;
             }).collect(Collectors.toList());
 

@@ -4,7 +4,7 @@ import org.dromara.common.mybatis.core.domain.BaseEntity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import java.util.Date;
+import java.time.LocalDate;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.io.Serial;
@@ -37,7 +37,7 @@ public class HrpLeaveRequests extends BaseEntity {
     /**
      * 期望休假日期
      */
-    private Date leaveDate;
+    private LocalDate leaveDate;
 
     /**
      * 状态(字典: 已提交, 已锁定, 已取消)

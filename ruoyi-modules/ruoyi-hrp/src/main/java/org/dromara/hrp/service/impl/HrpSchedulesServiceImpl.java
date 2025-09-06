@@ -152,7 +152,7 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
         Map<Long, Map<String, List<HrpSchedulesVo>>> scheduleRows = allSchedules.stream()
             .collect(Collectors.groupingBy(
                 HrpSchedulesVo::getUserId,
-                Collectors.groupingBy(vo -> DateUtil.format(vo.getScheduleDate(), "yyyy-MM-dd"))
+                Collectors.groupingBy(vo -> vo.getScheduleDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
             ));
 
         // 8. 组织员工信息
@@ -239,7 +239,7 @@ public class HrpSchedulesServiceImpl implements IHrpSchedulesService {
             .collect(Collectors.groupingBy(
                 HrpSchedulesVo::getUserId,
                 Collectors.groupingBy(
-                    vo -> DateUtil.format(vo.getScheduleDate(), "yyyy-MM-dd")
+                    vo -> vo.getScheduleDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
                 )
             ));
 

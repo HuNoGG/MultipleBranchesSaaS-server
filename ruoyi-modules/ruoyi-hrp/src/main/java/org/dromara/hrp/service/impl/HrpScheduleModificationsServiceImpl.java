@@ -200,8 +200,8 @@ public class HrpScheduleModificationsServiceImpl implements IHrpScheduleModifica
         );
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         for (HrpShifts shift : shifts) {
-            String dbStartTime = shift.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime().format(formatter);
-            String dbEndTime = shift.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalTime().format(formatter);
+            String dbStartTime = shift.getStartTime().format(formatter);
+            String dbEndTime = shift.getEndTime().format(formatter);
             if (startTime.equals(dbStartTime) && endTime.equals(dbEndTime)) {
                 return shift.getId();
             }

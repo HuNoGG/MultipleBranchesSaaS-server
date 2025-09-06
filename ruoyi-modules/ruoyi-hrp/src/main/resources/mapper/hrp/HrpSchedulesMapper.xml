@@ -164,5 +164,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </select>
 
+    <select id="selectWorkDatesForUsersBefore" resultMap="HrpSchedulesResult">
+        SELECT
+            user_id,
+            schedule_date
+        FROM
+            hrp_schedules
+        WHERE
+            user_id IN
+            <foreach item="userId" collection="userIds" open="(" separator="," close=")">
+                #{userId}
+            </foreach>
+            AND schedule_date &lt; #{startDate}
+            AND schedule_date &gt;= DATE_SUB(#{startDate}, INTERVAL #{days} DAY)
+    </select>
+
 
 </mapper>

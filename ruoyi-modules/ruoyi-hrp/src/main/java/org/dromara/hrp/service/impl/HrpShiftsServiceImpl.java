@@ -28,7 +28,7 @@ import org.dromara.hrp.mapper.HrpShiftsMapper;
 import org.dromara.hrp.service.IHrpShiftsService;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -202,7 +202,7 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
         }
 
         // 2. 处理班次和休息时间的增删改
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         for (BasicSettingsDto.ShiftDto shiftDto : dto.getShifts()) {
             HrpShifts shift = new HrpShifts();
@@ -212,8 +212,8 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
             shift.setIsCrossDay(shiftDto.isCrossDay());
             shift.setStoreId(dto.getStoreId());
             try {
-                shift.setStartTime(sdf.parse(shiftDto.getStartTime()));
-                shift.setEndTime(sdf.parse(shiftDto.getEndTime()));
+                shift.setStartTime(LocalTime.parse(shiftDto.getStartTime(), timeFormatter));
+                shift.setEndTime(LocalTime.parse(shiftDto.getEndTime(), timeFormatter));
             } catch (Exception e) {
                 throw new ServiceException("时间格式错误");
             }
@@ -240,8 +240,8 @@ public class HrpShiftsServiceImpl implements IHrpShiftsService {
                         HrpShiftBreaks shiftBreak = new HrpShiftBreaks();
                         shiftBreak.setShiftId(shift.getId());
                         try {
-                            shiftBreak.setBreakStartTime(sdf.parse(breakDto.getRange()[0]));
-                            shiftBreak.setBreakEndTime(sdf.parse(breakDto.getRange()[1]));
+                            shiftBreak.setBreakStartTime(LocalTime.parse(breakDto.getRange()[0], timeFormatter));
+                            shiftBreak.setBreakEndTime(LocalTime.parse(breakDto.getRange()[1], timeFormatter));
                         } catch (Exception e) {
                             throw new ServiceException("休息时间格式错误");
                         }

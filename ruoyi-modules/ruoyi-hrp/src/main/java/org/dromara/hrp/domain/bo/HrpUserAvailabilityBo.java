@@ -1,15 +1,15 @@
 package org.dromara.hrp.domain.bo;
 
-import org.dromara.hrp.domain.HrpUserAvailability;
-import org.dromara.common.mybatis.core.domain.BaseEntity;
-import org.dromara.common.core.validate.AddGroup;
-import org.dromara.common.core.validate.EditGroup;
 import io.github.linpeilie.annotations.AutoMapper;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import jakarta.validation.constraints.*;
-import java.util.Date;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import org.dromara.common.core.validate.AddGroup;
+import org.dromara.common.core.validate.EditGroup;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
+import org.dromara.hrp.domain.HrpUserAvailability;
+
+import java.time.LocalTime;
 
 /**
  * 员工可上班时段业务对象 hrp_user_availability
@@ -44,13 +44,13 @@ public class HrpUserAvailabilityBo extends BaseEntity {
      * 可上班的开始时间
      */
     @NotNull(message = "可上班的开始时间不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Date startTime;
+    private LocalTime startTime;
 
     /**
      * 可上班的结束时间
      */
     @NotNull(message = "可上班的结束时间不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Date endTime;
+    private LocalTime endTime;
 
 
 }

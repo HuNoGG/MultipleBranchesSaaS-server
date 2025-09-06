@@ -1,6 +1,5 @@
 package org.dromara.hrp.domain.vo;
 
-import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.dromara.hrp.domain.HrpShiftBreaks;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
@@ -12,9 +11,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Date;
-
-
+import java.time.LocalTime;
 
 /**
  * 班别休息时段视图对象 hrp_shift_breaks
@@ -46,14 +43,14 @@ public class HrpShiftBreaksVo implements Serializable {
      * 休息开始时间
      */
     @ExcelProperty(value = "休息开始时间")
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date breakStartTime;
+    @JsonFormat(pattern = "HH:mm")
+    private LocalTime breakStartTime;
 
     /**
      * 休息结束时间
      */
     @ExcelProperty(value = "休息结束时间")
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date breakEndTime;
+    @JsonFormat(pattern = "HH:mm")
+    private LocalTime breakEndTime;
 
 }

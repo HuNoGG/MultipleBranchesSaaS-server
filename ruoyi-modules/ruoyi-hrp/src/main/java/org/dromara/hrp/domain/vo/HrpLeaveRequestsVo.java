@@ -1,7 +1,5 @@
 package org.dromara.hrp.domain.vo;
 
-import java.time.LocalDate;
-import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.dromara.hrp.domain.HrpLeaveRequests;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
@@ -13,9 +11,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Date;
-
-
+import java.time.LocalDate;
 
 /**
  * 期望休假/排休记录视图对象 hrp_leave_requests
