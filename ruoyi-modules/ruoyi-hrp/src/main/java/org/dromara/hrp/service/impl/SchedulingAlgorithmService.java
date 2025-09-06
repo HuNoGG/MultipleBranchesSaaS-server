@@ -61,6 +61,7 @@ public class SchedulingAlgorithmService {
     @Transactional(rollbackFor = Exception.class)
     public ScheduleGenerationResult generateSchedule(ScheduleGenerateDto dto) {
         List<FeedbackItem> feedbackItems = new ArrayList<>();
+        // 获取排班模式
         String schedulingMode = StringUtils.hasText(dto.getSchedulingMode()) ? dto.getSchedulingMode() : "PRIORITY";
         log.info("智能排班任务启动 V4.0，分店ID: {}, 日期范围: {} to {}, 排班模式: {}", dto.getStoreId(), dto.getStartDate(), dto.getEndDate(), schedulingMode);
         int maxConsecutiveWorkDays = dto.getMaxConsecutiveWorkDays() != null ? dto.getMaxConsecutiveWorkDays() : MAX_CONSECUTIVE_WORK_DAYS;
@@ -71,13 +72,19 @@ public class SchedulingAlgorithmService {
             feedbackItems.add(FeedbackItem.builder().type(FeedbackItem.FeedbackType.SYSTEM_WARNING).severity(FeedbackItem.Severity.WARNING).message("所有日期的排班需求均为0, 未生成任何排班。").build());
             return new ScheduleGenerationResult(new ArrayList<>(), feedbackItems);
         }
-
+        // 2. 初始化排班矩阵并处理休假和固定休息
         ScheduleMatrix matrix = initializeMatrix(input, dto, feedbackItems, maxConsecutiveWorkDays);
+        // 3. 【步骤一】为每个班次分配正职员工
         assignFullTimeEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
+        // 4. 【步骤二】为每个班次分配休息时间
         List<BreakCoverageRequirement> breakReqs = assignBreakCoverage(matrix, input, schedulingMode);
+        // 5. 【步骤三】使用兼职及其他可用员工，补充剩余的完整班次缺口
         assignPartTimeAndOtherEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
+        // 6. 【最终检查与调整】为正职员工补足休息日
         finalizeFullTimeSchedules(matrix, input, feedbackItems);
+        // 7. 生成并保存结果
         List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, dto);
+        // 8. 生成结构化的缺口报告
         generateUnsatisfiedRequirementsReport(matrix, input, breakReqs, feedbackItems);
 
         log.info("智能排班任务完成，共生成 {} 条排班记录。", generatedSchedules.size());
@@ -171,7 +178,9 @@ public class SchedulingAlgorithmService {
 
     private ScheduleMatrix initializeMatrix(AlgorithmInput input, ScheduleGenerateDto dto, List<FeedbackItem> feedbackItems, int maxConsecutiveWorkDays) {
         ScheduleMatrix matrix = new ScheduleMatrix(input.getStartDate(), input.getEndDate(), input.getEmployees(), input.getShiftsById(), input.getShiftBreaksByShiftId(), input.getPastWorkDays(), maxConsecutiveWorkDays);
+        // 2.1 处理正职员工休假申请冲突
         handleFullTimeLeaveConflicts(input, feedbackItems);
+        // 2.2 锁定所有已批准的休假日和前端指定的固定休息日
         for (HrpLeaveRequestsVo leave : input.getLeaveRequests()) {
             if ("已提交".equals(leave.getApprovalStatus()) || "已锁定".equals(leave.getApprovalStatus())) {
                 matrix.blockDay(leave.getUserId(), leave.getLeaveDate(), "休假");
@@ -185,6 +194,7 @@ public class SchedulingAlgorithmService {
                 }
             }
         }
+        // 2.3 (预检查) 检查正职员工的休假是否过多，导致无法满足最低工时
         long totalDaysInPeriod = ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()) + 1;
         input.getEmployees().stream().filter(e -> "正职".equals(e.getEmployeeType())).forEach(emp -> {
             long blockedDays = matrix.getBlockedDaysCount(emp.getUserId());
@@ -381,18 +391,22 @@ public class SchedulingAlgorithmService {
     }
 
     private List<HrpUserProfileVo> selectBestCandidates(List<HrpUserProfileVo> candidates, int count, ScheduleMatrix matrix, Long skillId, AlgorithmInput input, String schedulingMode) {
+        //  // 1. 定义第一级排序
         Comparator<HrpUserProfileVo> primaryComparator = Comparator
+            // a. 员工类型 (正职 > 兼职)
             .comparing((HrpUserProfileVo e) -> "正职".equals(e.getEmployeeType()) ? 0 : 1)
+            // b. 兼职中，"全天可用"优先
             .thenComparing(e -> isPartTimerAllDayAvailable(e, input) ? 0 : 1)
+            // c. 技能优先级 (高分优先)
             .thenComparing(e -> getSkillPriority(e.getUserId(), skillId, input), Comparator.reverseOrder());
         Comparator<HrpUserProfileVo> tieBreaker;
         switch (schedulingMode) {
-            case "AVERAGE":
+            case "AVERAGE": // 平均模式的逻辑
                 tieBreaker = Comparator.comparingDouble((HrpUserProfileVo e) -> matrix.getTotalHours(e.getUserId()))
                     .thenComparingInt(e -> matrix.getSkillAssignedCount(e.getUserId(), skillId))
                     .thenComparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()));
                 break;
-            case "PRIORITY":
+            case "PRIORITY": // 优先模式的逻辑
             default:
                 tieBreaker = Comparator.comparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()))
                     .thenComparingDouble(e -> matrix.getTotalHours(e.getUserId()));
@@ -736,6 +750,7 @@ public class SchedulingAlgorithmService {
             // 检查过去的天数，直到达到maxConsecutiveWorkDays的限制
             for (int i = 1; i <= this.maxConsecutiveWorkDays + 1; i++) {
                 LocalDate date = checkDate.minusDays(i);
+                // 同时检查当前生成的排班 (assignments) 和 历史排班 (userPastWorkDays)
                 if (assignments.containsKey(userId + ":" + date) || userPastWorkDays.contains(date)) {
                     consecutiveDays++;
                 } else {
