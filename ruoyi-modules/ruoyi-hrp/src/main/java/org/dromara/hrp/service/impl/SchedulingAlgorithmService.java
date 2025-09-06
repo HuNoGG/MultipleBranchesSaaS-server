@@ -56,6 +56,37 @@ public class SchedulingAlgorithmService {
     @Autowired private HrpShiftBreaksMapper shiftBreaksMapper;
 
     /**
+     * 计算每个技能的稀缺度
+     * 稀缺度 = 总需求量 / 拥有该技能的员工总数
+     * @param input 算法输入数据
+     * @return 一个包含 skillId -> scarcityScore 的 Map
+     */
+    private Map<Long, Double> calculateSkillScarcity(AlgorithmInput input) {
+        // 1. 统计每个技能的总需求量
+        Map<Long, Integer> skillDemand = new HashMap<>();
+        input.getDailyRequirements().values().stream()
+            .flatMap(List::stream)
+            .forEach(req -> skillDemand.merge(req.getSkillId(), req.getRequiredCount(), Integer::sum));
+
+        // 2. 统计每个技能的供给量（即拥有该技能的员工数）
+        Map<Long, Long> skillSupply = input.getUserSkills().values().stream()
+            .flatMap(List::stream)
+            .map(HrpUserSkillsVo::getSkillId)
+            .collect(Collectors.groupingBy(skillId -> skillId, Collectors.counting()));
+
+        // 3. 计算稀缺度
+        Map<Long, Double> skillScarcity = new HashMap<>();
+        skillDemand.forEach((skillId, demand) -> {
+            long supply = skillSupply.getOrDefault(skillId, 0L);
+            double scarcity = (supply == 0) ? Double.MAX_VALUE : (double) demand / supply;
+            skillScarcity.put(skillId, scarcity);
+        });
+
+        log.info("技能稀缺度计算完成: {}", skillScarcity);
+        return skillScarcity;
+    }
+
+    /**
      * 智能排班算法主入口
      */
     @Transactional(rollbackFor = Exception.class)
@@ -72,11 +103,18 @@ public class SchedulingAlgorithmService {
             return new ScheduleGenerationResult(new ArrayList<>(), feedbackItems);
         }
 
+        // 计算技能稀缺度
+        Map<Long, Double> skillScarcity = calculateSkillScarcity(input);
+
         ScheduleMatrix matrix = initializeMatrix(input, dto, feedbackItems, maxConsecutiveWorkDays);
-        assignFullTimeEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
+        assignFullTimeEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays, skillScarcity);
         List<BreakCoverageRequirement> breakReqs = assignBreakCoverage(matrix, input, schedulingMode);
-        assignPartTimeAndOtherEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
+        assignPartTimeAndOtherEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays, skillScarcity);
         finalizeFullTimeSchedules(matrix, input, feedbackItems);
+
+        // 新增的步骤：复查和调换
+        reviewAndSwapSchedules(matrix, input, feedbackItems);
+
         List<HrpSchedules> generatedSchedules = buildAndSaveResults(matrix, dto);
         generateUnsatisfiedRequirementsReport(matrix, input, breakReqs, feedbackItems);
 
@@ -227,11 +265,12 @@ public class SchedulingAlgorithmService {
         });
     }
 
-    private void assignFullTimeEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode, int maxConsecutiveWorkDays) {
+    private void assignFullTimeEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode, int maxConsecutiveWorkDays, Map<Long, Double> skillScarcity) {
         log.info("【阶段一】开始为正职员工排班 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input);
+            // 使用新的排序方法
+            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input, skillScarcity);
             for (HrpScheduleRequirementsVo req : sortedRequirements) {
                 int deficit = req.getRequiredCount() - matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
                 if (deficit <= 0) continue;
@@ -269,11 +308,11 @@ public class SchedulingAlgorithmService {
         }
     }
 
-    private void assignPartTimeAndOtherEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode, int maxConsecutiveWorkDays) {
+    private void assignPartTimeAndOtherEmployees(ScheduleMatrix matrix, AlgorithmInput input, String schedulingMode, int maxConsecutiveWorkDays, Map<Long, Double> skillScarcity) {
         log.info("【阶段三】开始使用兼职及其他员工补充剩余的完整班次缺口 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input);
+            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input, skillScarcity);
             for (HrpScheduleRequirementsVo req : sortedRequirements) {
                 int deficit = req.getRequiredCount() - matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
                 if (deficit <= 0) continue;
@@ -404,9 +443,15 @@ public class SchedulingAlgorithmService {
         return candidates.stream().limit(count).collect(Collectors.toList());
     }
 
-    private List<HrpScheduleRequirementsVo> sortRequirementsByUrgency(List<HrpScheduleRequirementsVo> requirements, ScheduleMatrix matrix, LocalDate date, AlgorithmInput input) {
+    private List<HrpScheduleRequirementsVo> sortRequirementsByUrgency(List<HrpScheduleRequirementsVo> requirements, ScheduleMatrix matrix, LocalDate date, AlgorithmInput input, Map<Long, Double> skillScarcity) {
+        // 核心排序逻辑：优先处理最稀缺的技能需求
         return requirements.stream()
-            .sorted(Comparator.comparing((HrpScheduleRequirementsVo req) -> input.getShiftsById().get(req.getShiftId()).getStartTime())
+            .sorted(Comparator
+                // 1. 稀缺度降序排列 (越稀缺的越优先)
+                .comparing((HrpScheduleRequirementsVo req) -> skillScarcity.getOrDefault(req.getSkillId(), 0.0), Comparator.reverseOrder())
+                // 2. 班次开始时间升序排列 (越早的班次越优先)
+                .thenComparing(req -> input.getShiftsById().get(req.getShiftId()).getStartTime())
+                // 3. 缺口人数降序排列 (缺口越大的越优先)
                 .thenComparing(
                     Comparator.comparingInt((HrpScheduleRequirementsVo req) ->
                         req.getRequiredCount() - matrix.getAssignedCount(date, req.getShiftId(), req.getSkillId())
@@ -555,6 +600,123 @@ public class SchedulingAlgorithmService {
 
     private String findEmployeeName(Long userId, List<HrpUserProfileVo> employees) {
         return employees.stream().filter(e -> e.getUserId().equals(userId)).findFirst().map(HrpUserProfileVo::getUserName).orElse("未知员工");
+    }
+
+    /**
+     * 复查并尝试通过调换来优化排班，主要目标是填补空缺
+     * @param matrix 排班矩阵
+     * @param input 算法输入
+     * @param feedbackItems 反馈信息列表
+     */
+    private void reviewAndSwapSchedules(ScheduleMatrix matrix, AlgorithmInput input, List<FeedbackItem> feedbackItems) {
+        log.info("【阶段四】开始复查和调换以优化排班...");
+        final int MAX_SWAP_ITERATIONS = 5; // 最多进行5轮调换，防止死循环
+        boolean swappedInLastIteration;
+
+        for (int i = 0; i < MAX_SWAP_ITERATIONS; i++) {
+            swappedInLastIteration = false;
+            log.info("开始第 {}/{} 轮调换...", i + 1, MAX_SWAP_ITERATIONS);
+
+            // 1. 识别当前所有的空缺
+            List<Map<String, Object>> gaps = findGaps(matrix, input);
+            if (gaps.isEmpty()) {
+                log.info("没有发现排班缺口，优化结束。");
+                break;
+            }
+
+            gapLoop:
+            for (Map<String, Object> gap : gaps) {
+                LocalDate gapDate = (LocalDate) gap.get("date");
+                HrpScheduleRequirementsVo gapReq = (HrpScheduleRequirementsVo) gap.get("req");
+                HrpShiftsVo gapShift = input.getShiftsById().get(gapReq.getShiftId());
+
+                // 2. 寻找能填补这个空缺的“给予者” (Giver)
+                // Giver是已经有排班，但可以被移动来填补当前空缺的员工
+                for (HrpUserProfileVo giver : input.getEmployees()) {
+                    List<ScheduleAssignment> giverAssignments = matrix.getAssignments().get(giver.getUserId() + ":" + gapDate);
+                    if (giverAssignments == null || giverAssignments.isEmpty()) continue; // Giver当天必须有班
+
+                    // 检查Giver是否能胜任空缺岗位
+                    boolean canFillGap = input.getUserSkills().getOrDefault(giver.getUserId(), Collections.emptyList()).stream()
+                        .anyMatch(s -> s.getSkillId().equals(gapReq.getSkillId()));
+                    if (!canFillGap) continue;
+
+                    // 检查移动后是否会产生冲突
+                    if (!matrix.isTimeRangeAvailable(giver.getUserId(), gapDate, gapShift)) continue;
+                    if (matrix.getConsecutiveWorkDays(giver.getUserId(), gapDate) >= MAX_CONSECUTIVE_WORK_DAYS) continue;
+
+
+                    // 3. 寻找能接替Giver原来班次的“接收者” (Taker)
+                    // Taker是当天没有排班，但可以来顶替Giver原来班次的员工
+                    for (ScheduleAssignment originalAssignment : new ArrayList<>(giverAssignments)) { // 复制列表以避免ConcurrentModificationException
+                        HrpShiftsVo originalShift = input.getShiftsById().get(originalAssignment.getShiftId());
+
+                        for (HrpUserProfileVo taker : input.getEmployees()) {
+                            if (taker.getUserId().equals(giver.getUserId())) continue;
+                            if (!matrix.isAvailableForDay(taker.getUserId(), gapDate)) continue; // Taker当天必须可用
+
+                             // Taker当天不能有任何排班
+                            if (matrix.getAssignments().containsKey(taker.getUserId() + ":" + gapDate)) continue;
+
+
+                            // 检查Taker是否能胜任Giver的旧岗位
+                            boolean canTakeShift = input.getUserSkills().getOrDefault(taker.getUserId(), Collections.emptyList()).stream()
+                                .anyMatch(s -> s.getSkillId().equals(originalAssignment.getSkillId()));
+                            if (!canTakeShift) continue;
+
+                            // 检查Taker的时间是否允许
+                            if (!matrix.isTimeRangeAvailable(taker.getUserId(), gapDate, originalShift)) continue;
+                            if (matrix.getConsecutiveWorkDays(taker.getUserId(), gapDate) >= MAX_CONSECUTIVE_WORK_DAYS) continue;
+
+
+                            // 找到了一个可行的“Giver-Taker”对，执行调换！
+                            log.info("找到可行调换: [Giver: {}, Taker: {}] for Gap [{}, {}, {}]",
+                                giver.getUserName(), taker.getUserName(), gapDate, gapShift.getName(), gapReq.getSkillId());
+
+                            // a. 取消Giver的旧排班
+                            matrix.unassignShift(giver.getUserId(), gapDate, originalAssignment.getShiftId(), originalAssignment.getSkillId());
+                            // b. 将Giver安排到空缺岗位
+                            matrix.assignShift(giver.getUserId(), gapDate, gapReq.getShiftId(), gapReq.getSkillId());
+                            // c. 将Taker安排到Giver的旧岗位
+                            matrix.assignShift(taker.getUserId(), gapDate, originalAssignment.getShiftId(), originalAssignment.getSkillId());
+
+                            String feedbackMsg = String.format("通过调换 [ %s ] 与 [ %s ] 的工作，成功填补了 %s 的 [%s] 岗位空缺。",
+                                giver.getUserName(), taker.getUserName(), gapDate, skillsMapper.selectById(gapReq.getSkillId()).getName());
+                            feedbackItems.add(FeedbackItem.builder().type(FeedbackItem.FeedbackType.OPTIMIZATION_INFO).severity(FeedbackItem.Severity.INFO).message(feedbackMsg).build());
+
+                            swappedInLastIteration = true;
+                            continue gapLoop; // 跳到下一个空缺的处理
+                        }
+                    }
+                }
+            }
+
+            if (!swappedInLastIteration) {
+                log.info("本轮未找到任何可行的调换，优化结束。");
+                break; // 如果一整轮都没有发生任何调换，说明已经达到局部最优，提前退出
+            }
+        }
+    }
+
+    /**
+     * 查找当前排班矩阵中的所有空缺
+     */
+    private List<Map<String, Object>> findGaps(ScheduleMatrix matrix, AlgorithmInput input) {
+        List<Map<String, Object>> gaps = new ArrayList<>();
+        input.getDailyRequirements().forEach((date, reqs) -> {
+            for (HrpScheduleRequirementsVo req : reqs) {
+                int deficit = req.getRequiredCount() - matrix.getAssignedCount(date, req.getShiftId(), req.getSkillId());
+                if (deficit > 0) {
+                    for (int i = 0; i < deficit; i++) {
+                        Map<String, Object> gapInfo = new HashMap<>();
+                        gapInfo.put("date", date);
+                        gapInfo.put("req", req);
+                        gaps.add(gapInfo);
+                    }
+                }
+            }
+        });
+        return gaps;
     }
 
     @Data
@@ -810,6 +972,27 @@ public class SchedulingAlgorithmService {
 
         public Map<String, List<ScheduleAssignment>> getAssignments() {
             return this.assignments;
+        }
+
+        /**
+         * 取消一个已有的排班
+         * @param userId 用户ID
+         * @param date 日期
+         * @param shiftId 班次ID
+         * @param skillId 技能ID
+         */
+        public void unassignShift(Long userId, LocalDate date, Long shiftId, Long skillId) {
+            String key = userId + ":" + date;
+            List<ScheduleAssignment> userAssignments = assignments.get(key);
+            if (userAssignments != null) {
+                boolean removed = userAssignments.removeIf(a -> a.getShiftId().equals(shiftId) && a.getSkillId().equals(skillId));
+                if (removed) {
+                    totalHours.merge(userId, -getShiftDuration(shiftId), Double::sum);
+                    if (userAssignments.isEmpty()) {
+                        assignments.remove(key);
+                    }
+                }
+            }
         }
     }
 }
