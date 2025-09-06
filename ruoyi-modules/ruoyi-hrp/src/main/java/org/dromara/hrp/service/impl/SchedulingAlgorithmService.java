@@ -110,14 +110,12 @@ public class SchedulingAlgorithmService {
 
         ScheduleMatrix matrix = initializeMatrix(input, dto, feedbackItems, maxConsecutiveWorkDays);
         // 3. 【步骤一】为每个班次分配正职员工
-        assignFullTimeEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
-        // 4. 【步骤二】为每个班次分配休息时间
         assignFullTimeEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays, skillScarcity);
+        // 4. 【步骤二】为每个班次分配休息时间
         List<BreakCoverageRequirement> breakReqs = assignBreakCoverage(matrix, input, schedulingMode);
         // 5. 【步骤三】使用兼职及其他可用员工，补充剩余的完整班次缺口
-        assignPartTimeAndOtherEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays);
-        // 6. 【最终检查与调整】为正职员工补足休息日
         assignPartTimeAndOtherEmployees(matrix, input, schedulingMode, maxConsecutiveWorkDays, skillScarcity);
+        // 6. 【最终检查与调整】为正职员工补足休息日
         finalizeFullTimeSchedules(matrix, input, feedbackItems);
         // 7. 生成并保存结果
 

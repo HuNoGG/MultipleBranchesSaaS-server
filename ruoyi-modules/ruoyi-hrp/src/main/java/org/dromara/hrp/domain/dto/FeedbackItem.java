@@ -61,6 +61,7 @@ public class FeedbackItem implements Serializable {
     public enum FeedbackType {
         MANPOWER_SHORTAGE,      // 人力缺口
         CONSTRAINT_VIOLATION,   // 规则冲突
+        OPTIMIZATION_INFO,
         SYSTEM_WARNING          // 系统警告
     }
 
@@ -69,6 +70,6 @@ public class FeedbackItem implements Serializable {
      */
     public enum Severity {
         WARNING,                // 警告
-        ERROR                   // 错误（严重问题）
+        INFO, ERROR                   // 错误（严重问题）
     }
 }
