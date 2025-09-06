@@ -120,9 +120,9 @@ public class SchedulingAlgorithmService {
 
         // 查询员工、技能、可用时间、班次等基础信息
         List<HrpUserProfileVo> employees = userProfileMapper.selectVoByUserIds(userIds);
-        Map<Long, List<Long>> userSkills = userSkillsMapper.selectVoListByUserIds(userIds).stream()
-            .collect(Collectors.groupingBy(HrpUserSkillsVo::getUserId, Collectors.mapping(HrpUserSkillsVo::getSkillId, Collectors.toList())));
-        // TODO: 兼职人员未设置可用时间时,代表全天可用 - 此逻辑将在检查约束时处理
+        // 【核心修改】将原来的技能ID列表，改为技能视图对象列表，以便后续获取技能优先级
+        Map<Long, List<HrpUserSkillsVo>> userSkills = userSkillsMapper.selectVoListByUserIds(userIds).stream()
+            .collect(Collectors.groupingBy(HrpUserSkillsVo::getUserId));
         Map<Long, List<HrpUserAvailabilityVo>> userAvailabilities = userAvailabilityMapper.selectVoListByUserIds(userIds).stream()
             .collect(Collectors.groupingBy(HrpUserAvailabilityVo::getUserId));
         List<HrpLeaveRequestsVo> leaveRequests = leaveRequestsMapper.selectVoListByUsersAndDate(userIds, startDate, endDate);
@@ -147,7 +147,8 @@ public class SchedulingAlgorithmService {
             List<HrpUserProfileVo> candidates = findCandidatesForBreak(req, matrix, input);
             if (!candidates.isEmpty()) {
                 //  替班选择也遵循排班模式
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, 1, matrix, req.getSkillId(), schedulingMode);
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, 1, matrix, req.getSkillId(), input);
+                if (CollectionUtils.isEmpty(selectedEmployees)) continue;
                 HrpUserProfileVo selectedEmployee = selectedEmployees.get(0);
 
                 Map<String, Object> remarkMap = new HashMap<>();
@@ -335,7 +336,7 @@ public class SchedulingAlgorithmService {
         log.info("【阶段一】开始为正职员工排班 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate);
+            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input);
 
             for (HrpScheduleRequirementsVo req : sortedRequirements) {
                 int deficit = req.getRequiredCount() - matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
@@ -343,7 +344,7 @@ public class SchedulingAlgorithmService {
 
                 List<HrpUserProfileVo> candidates = findCandidatesForRequirement(currentDate, req, matrix, input, "正职");
                 // 【核心修改点】: 根据排班模式选择最优员工
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), schedulingMode);
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), input);
 
                 for (HrpUserProfileVo employee : selectedEmployees) {
                     matrix.assignShift(employee.getUserId(), currentDate, req.getShiftId(), req.getSkillId());
@@ -383,7 +384,7 @@ public class SchedulingAlgorithmService {
         // 寻找该班次下最缺人的、且该员工能胜任的岗位
         Long skillIdToAssign = requirementsForToday.stream()
             .filter(req -> req.getShiftId().equals(bestShift.getId()) &&
-                input.getUserSkills().getOrDefault(employee.getUserId(), Collections.emptyList()).contains(req.getSkillId()))
+                input.getUserSkills().getOrDefault(employee.getUserId(), Collections.emptyList()).stream().anyMatch(s -> s.getSkillId().equals(req.getSkillId())))
             .min(Comparator.comparingInt(req -> matrix.getAssignedCount(date, req.getShiftId(), req.getSkillId())))
             .map(HrpScheduleRequirementsVo::getSkillId)
             .orElse(null);
@@ -402,7 +403,7 @@ public class SchedulingAlgorithmService {
         log.info("【阶段三】开始使用兼职及其他员工补充剩余的完整班次缺口 (模式: {})", schedulingMode);
         for (LocalDate currentDate = input.getStartDate(); !currentDate.isAfter(input.getEndDate()); currentDate = currentDate.plusDays(1)) {
             List<HrpScheduleRequirementsVo> requirementsForToday = input.getDailyRequirements().getOrDefault(currentDate, Collections.emptyList());
-            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate);
+            List<HrpScheduleRequirementsVo> sortedRequirements = sortRequirementsByUrgency(requirementsForToday, matrix, currentDate, input);
 
             for (HrpScheduleRequirementsVo req : sortedRequirements) {
                 int deficit = req.getRequiredCount() - matrix.getAssignedCount(currentDate, req.getShiftId(), req.getSkillId());
@@ -410,7 +411,7 @@ public class SchedulingAlgorithmService {
 
                 List<HrpUserProfileVo> candidates = findCandidatesForRequirement(currentDate, req, matrix, input, "兼职");
                 // 根据排班模式选择最优员工
-                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), schedulingMode);
+                List<HrpUserProfileVo> selectedEmployees = selectBestCandidates(candidates, deficit, matrix, req.getSkillId(), input);
 
                 for (HrpUserProfileVo employee : selectedEmployees) {
                     matrix.assignShift(employee.getUserId(), currentDate, req.getShiftId(), req.getSkillId());
@@ -431,7 +432,6 @@ public class SchedulingAlgorithmService {
         for (HrpUserProfileVo employee : input.getEmployees()) {
             // **核心修改点：根据 employeeTypeFilter 筛选员工类型**
             if (employeeTypeFilter != null) {
-                // TODO: HrpUserProfileVo 中需要有 employeeType 字段, 值为 "正职" 或 "兼职"
                 if ("正职".equals(employeeTypeFilter) && !"正职".equals(employee.getEmployeeType())) continue;
                 if ("兼职".equals(employeeTypeFilter) && "正职".equals(employee.getEmployeeType())) continue;
             }
@@ -440,7 +440,8 @@ public class SchedulingAlgorithmService {
             // 检查硬性约束
             if (!matrix.isAvailableForDay(userId, date)) continue;
             if (!matrix.isTimeRangeAvailable(userId, date, shift)) continue;
-            if (!input.getUserSkills().getOrDefault(userId, Collections.emptyList()).contains(req.getSkillId())) continue;
+            // 【核心修改】适配新的 userSkills 数据结构
+            if (input.getUserSkills().getOrDefault(userId, Collections.emptyList()).stream().noneMatch(s -> s.getSkillId().equals(req.getSkillId()))) continue;
             // **核心修改点：在可用性检查中处理兼职的特殊规则**
             if (!isAvailableForShift(employee, date, shift, input)) continue;
             if (matrix.getConsecutiveWorkDays(userId, date) >= 6) continue; // 假设最大连续工作6天
@@ -520,7 +521,7 @@ public class SchedulingAlgorithmService {
             if (!matrix.isTimeRangeAvailable(userId, date, shift)) continue;
 
             // 检查技能
-            if (!input.getUserSkills().getOrDefault(userId, Collections.emptyList()).contains(req.getSkillId())) continue;
+            if (input.getUserSkills().getOrDefault(userId, Collections.emptyList()).stream().noneMatch(s -> s.getSkillId().equals(req.getSkillId()))) continue;
             // 检查可用时间段
             if (!isAvailableForShift(employee, date, shift, input)) continue;
             // 检查工作规则 (连续工作日、周工时上限等)
@@ -567,40 +568,63 @@ public class SchedulingAlgorithmService {
     }
 
     /**
+     * 【新增】辅助方法: 检查兼职员工是否“全天可用”
+     * 全天可用的定义: 1. 未配置任何可用时间; 2. 配置的可用时间与门店营业时间完全一致
+     */
+    private boolean isPartTimerAllDayAvailable(HrpUserProfileVo employee, AlgorithmInput input) {
+        // 规则仅对兼职生效
+        if (!"兼职".equals(employee.getEmployeeType())) {
+            return false;
+        }
+        // 全天可用的唯一定义: 未配置任何可用时间
+        return CollectionUtils.isEmpty(input.getUserAvailabilities().get(employee.getUserId()));
+    }
+
+    /**
+     * 【新增】辅助方法: 获取员工特定技能的优先级
+     */
+    private Long getSkillPriority(Long userId, Long skillId, AlgorithmInput input) {
+        return input.getUserSkills().getOrDefault(userId, Collections.emptyList()).stream()
+            .filter(s -> s.getSkillId().equals(skillId))
+            .map(HrpUserSkillsVo::getPriority)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(0L); // 默认优先级为0
+    }
+
+    /**
      * 辅助方法: 从候选人中选择最优的 N 位 (已重构，加入优先级)
      */
-    private List<HrpUserProfileVo> selectBestCandidates(List<HrpUserProfileVo> candidates, int count, ScheduleMatrix matrix, Long skillId, String schedulingMode) {
-        Comparator<HrpUserProfileVo> comparator;
+    private List<HrpUserProfileVo> selectBestCandidates(List<HrpUserProfileVo> candidates, int count, ScheduleMatrix matrix, Long skillId, AlgorithmInput input) {
+        // 【核心改造】实现新的复合优先级排序逻辑
+        Comparator<HrpUserProfileVo> customComparator = Comparator
+            // 1. 员工类型: 正职(0) > 兼职(1)
+            .comparing((HrpUserProfileVo e) -> "正职".equals(e.getEmployeeType()) ? 0 : 1)
+            // 2. 兼职中, 全天可用(0) > 非全天可用(1)
+            .thenComparing(e -> isPartTimerAllDayAvailable(e, input) ? 0 : 1)
+            // 3. 技能优先级: 高分 > 低分 (降序)
+            .thenComparing(e -> getSkillPriority(e.getUserId(), skillId, input), Comparator.reverseOrder())
+            // 4. 最终兜底排序: 总工时少的人优先 (升序)
+            .thenComparingDouble(e -> matrix.getTotalHours(e.getUserId()));
 
-        switch (schedulingMode) {
-            case "AVERAGE":
-                // 平均分配模式: 总工时 -> 岗位出勤次数 -> 优先分数
-                comparator = Comparator
-                    .comparingDouble((HrpUserProfileVo e) -> matrix.getTotalHours(e.getUserId()))
-                    .thenComparingInt(e -> matrix.getSkillAssignedCount(e.getUserId(), skillId))
-                    .thenComparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()));
-                break;
-            case "PRIORITY":
-            default:
-                // 指定优先模式: 优先分数 -> 总工时
-                comparator = Comparator
-                    .comparing(HrpUserProfileVo::getPriorityScore, Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparingDouble(e -> matrix.getTotalHours(e.getUserId()));
-                break;
-        }
+        // TODO: 可在此处为后续更复杂的次排序规则（如员工评价、成本等）预留扩展点
 
-        candidates.sort(comparator);
+        candidates.sort(customComparator);
         return candidates.stream().limit(count).collect(Collectors.toList());
     }
 
     /**
      * 辅助方法: 对需求按紧急程度排序 (缺口越大越紧急)
      */
-    private List<HrpScheduleRequirementsVo> sortRequirementsByUrgency(List<HrpScheduleRequirementsVo> requirements, ScheduleMatrix matrix, LocalDate date) {
+    private List<HrpScheduleRequirementsVo> sortRequirementsByUrgency(List<HrpScheduleRequirementsVo> requirements, ScheduleMatrix matrix, LocalDate date, AlgorithmInput input) {
+        // 优先处理时间早的班次, 然后再处理缺口大的
         return requirements.stream()
-            .sorted(Comparator.comparingInt((HrpScheduleRequirementsVo req) ->
-                req.getRequiredCount() - matrix.getAssignedCount(date, req.getShiftId(), req.getSkillId())
-            ).reversed())
+            .sorted(Comparator.comparing((HrpScheduleRequirementsVo req) -> input.getShiftsById().get(req.getShiftId()).getStartTime())
+                .thenComparing(
+                    Comparator.comparingInt((HrpScheduleRequirementsVo req) ->
+                        req.getRequiredCount() - matrix.getAssignedCount(date, req.getShiftId(), req.getSkillId())
+                    ).reversed()
+                ))
             .collect(Collectors.toList());
     }
 
@@ -610,7 +634,7 @@ public class SchedulingAlgorithmService {
     private List<HrpScheduleRequirementsVo> sortRequirements(List<HrpScheduleRequirementsVo> requirements, AlgorithmInput input) {
         Map<Long, Long> skillCounts = input.getUserSkills().values().stream()
             .flatMap(List::stream)
-            .collect(Collectors.groupingBy(skillId -> skillId, Collectors.counting()));
+            .collect(Collectors.groupingBy(HrpUserSkillsVo::getSkillId, Collectors.counting()));
 
         return requirements.stream()
             .sorted(Comparator.comparing((HrpScheduleRequirementsVo req) -> skillCounts.getOrDefault(req.getSkillId(), 0L))
@@ -711,7 +735,7 @@ public class SchedulingAlgorithmService {
             Long userId = employee.getUserId();
             if (!matrix.isAvailableForDay(userId, req.getDate())) continue;
             if (!matrix.isTimeRangeAvailableForBreak(userId, req.getDate(), req.getStartTime(), req.getEndTime())) continue;
-            if (!input.getUserSkills().getOrDefault(userId, Collections.emptyList()).contains(req.getSkillId())) continue;
+            if (input.getUserSkills().getOrDefault(userId, Collections.emptyList()).stream().noneMatch(s -> s.getSkillId().equals(req.getSkillId()))) continue;
             if (!isAvailableForTimeRange(userId, req.getDate(), req.getStartTime(), req.getEndTime(), input)) continue;
 
             candidates.add(employee);
@@ -796,7 +820,7 @@ public class SchedulingAlgorithmService {
         private final LocalDate startDate, endDate;
         private final Long storeId;
         private final List<HrpUserProfileVo> employees;
-        private final Map<Long, List<Long>> userSkills;
+        private final Map<Long, List<HrpUserSkillsVo>> userSkills;
         private final Map<Long, List<HrpUserAvailabilityVo>> userAvailabilities;
         private final List<HrpLeaveRequestsVo> leaveRequests;
         private final List<HrpShiftsVo> shifts;
@@ -804,7 +828,7 @@ public class SchedulingAlgorithmService {
         private final Map<Long, List<HrpShiftBreaksVo>> shiftBreaksByShiftId;
         private final Map<LocalDate, List<HrpScheduleRequirementsVo>> dailyRequirements;
 
-        public AlgorithmInput(LocalDate start, LocalDate end, Long storeId, List<HrpUserProfileVo> emp, Map<Long, List<Long>> skills, Map<Long, List<HrpUserAvailabilityVo>> avail, List<HrpLeaveRequestsVo> leaves, List<HrpShiftsVo> shifts, List<HrpShiftBreaksVo> breaks, Map<LocalDate, List<HrpScheduleRequirementsVo>> dailyReqs) {
+        public AlgorithmInput(LocalDate start, LocalDate end, Long storeId, List<HrpUserProfileVo> emp, Map<Long, List<HrpUserSkillsVo>> skills, Map<Long, List<HrpUserAvailabilityVo>> avail, List<HrpLeaveRequestsVo> leaves, List<HrpShiftsVo> shifts, List<HrpShiftBreaksVo> breaks, Map<LocalDate, List<HrpScheduleRequirementsVo>> dailyReqs) {
             this.startDate = start;
             this.endDate = end;
             this.storeId = storeId;
@@ -945,7 +969,8 @@ public class SchedulingAlgorithmService {
                 if (existingShift.getIsCrossDay()) existingEnd = existingEnd.plusHours(24);
 
                 // 核心冲突检测: (StartA < EndB) and (EndA > StartB)
-                if (newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart)) {
+                // 增加1分钟的buffer来处理背靠背的班次
+                if (newStart.isBefore(existingEnd.plusMinutes(1)) && newEnd.isAfter(existingStart.minusMinutes(1))) {
                     return false; // 发现时间重叠, 不可用
                 }
             }

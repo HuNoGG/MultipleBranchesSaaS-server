@@ -9,12 +9,12 @@ import org.dromara.hrp.domain.vo.*;
 import org.dromara.hrp.mapper.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -34,7 +34,8 @@ import static org.mockito.Mockito.when;
  *
  * @description 使用 Mockito 模拟 Mapper 层，专注于测试排班核心业务逻辑。
  */
-@ExtendWith(MockitoExtension.class) // 【修复】使用 JUnit 5 的 Mockito 扩展
+@Tag("dev")
+@ExtendWith(MockitoExtension.class)
 class SchedulingAlgorithmServiceTest {
 
     @InjectMocks
@@ -72,32 +73,23 @@ class SchedulingAlgorithmServiceTest {
         LocalDate testDate = LocalDate.now();
         Long storeId = 1L;
 
-        // 模拟员工数据
         List<HrpUserProfileVo> employees = List.of(
-            // 全职咖啡师 (高优先级)
-            createEmployee(101L, "张三", "全职", 1),
-            // 全职收银员 (高优先级)
-            createEmployee(102L, "李四", "全职", 1),
-            // 兼职收银员 (低优先级)
+            createEmployee(101L, "张三", "正职", 1),
+            createEmployee(102L, "李四", "正职", 1),
             createEmployee(201L, "王五", "兼职", 10)
         );
 
-        // 模拟技能数据
-        Map<Long, List<Long>> userSkills = Map.of(
-            101L, List.of(1L), // 张三 - 咖啡师
-            102L, List.of(2L), // 李四 - 收银员
-            201L, List.of(2L)  // 王五 - 收银员
+        Map<Long, Map<Long, Long>> userSkills = Map.of(
+            101L, Map.of(1L, 5L), // 张三 - 咖啡师
+            102L, Map.of(2L, 5L), // 李四 - 收银员
+            201L, Map.of(2L, 5L)  // 王五 - 收银员
         );
 
-        // 模拟可用性 (全职员工全天可用)
         Map<Long, List<HrpUserAvailabilityVo>> availabilities = createFullAvailability(employees, testDate);
-
-        // 模拟排班需求: 早班需要1名咖啡师和1名收银员
         ScheduleGenerateDto dto = createSingleDayDto(storeId, testDate, employees, "09:00-17:00", Map.of("咖啡师", 1, "收银员", 1));
 
-        // Mock Mapper 的行为
         when(userProfileMapper.selectVoByUserIds(anyList())).thenReturn(employees);
-        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkills(userSkills));
+        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkillsWithPriority(userSkills));
         when(userAvailabilityMapper.selectVoListByUserIds(anyList())).thenReturn(flattenAvailabilities(availabilities));
         when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(Collections.emptyList());
         doNothing().when(schedulesMapper).insertBatch(anyList());
@@ -110,7 +102,6 @@ class SchedulingAlgorithmServiceTest {
         assertEquals(2, result.getSchedules().size(), "应生成两条排班记录");
         assertTrue(result.getFeedbackItems().stream().noneMatch(f -> f.getType() == FeedbackItem.FeedbackType.MANPOWER_SHORTAGE), "不应有人力缺口");
 
-        // 验证排班的员工是否正确
         Set<Long> scheduledUserIds = result.getSchedules().stream().map(HrpSchedules::getUserId).collect(Collectors.toSet());
         assertTrue(scheduledUserIds.contains(101L), "全职咖啡师张三应被排班");
         assertTrue(scheduledUserIds.contains(102L), "全职收银员李四应被排班");
@@ -129,22 +120,24 @@ class SchedulingAlgorithmServiceTest {
         Long storeId = 1L;
 
         List<HrpUserProfileVo> employees = List.of(
-            createEmployee(101L, "张三", "全职", 1), // 全职咖啡师
-            createEmployee(102L, "李四", "全职", 1), // 全职收银员 (请假)
-            createEmployee(201L, "王五", "兼职", 10)  // 兼职收银员 (无可用性设置 = 全天可用)
+            createEmployee(101L, "张三", "正职", 1),
+            createEmployee(102L, "李四", "正职", 1),
+            createEmployee(201L, "王五", "兼职", 10)
         );
 
-        Map<Long, List<Long>> userSkills = Map.of(101L, List.of(1L), 102L, List.of(2L), 201L, List.of(2L));
+        Map<Long, Map<Long, Long>> userSkills = Map.of(
+            101L, Map.of(1L, 5L),
+            102L, Map.of(2L, 5L),
+            201L, Map.of(2L, 5L)
+        );
 
-        // 全职李四请假
         List<HrpLeaveRequestsVo> leaveRequests = List.of(createLeaveRequest(102L, testDate));
-        // 兼职王五没有设置可用时间
         Map<Long, List<HrpUserAvailabilityVo>> availabilities = createFullAvailability(List.of(employees.get(0)), testDate);
 
         ScheduleGenerateDto dto = createSingleDayDto(storeId, testDate, employees, "09:00-17:00", Map.of("咖啡师", 1, "收银员", 1));
 
         when(userProfileMapper.selectVoByUserIds(anyList())).thenReturn(employees);
-        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkills(userSkills));
+        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkillsWithPriority(userSkills));
         when(userAvailabilityMapper.selectVoListByUserIds(anyList())).thenReturn(flattenAvailabilities(availabilities));
         when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(leaveRequests);
         doNothing().when(schedulesMapper).insertBatch(anyList());
@@ -175,20 +168,22 @@ class SchedulingAlgorithmServiceTest {
         Long storeId = 1L;
 
         List<HrpUserProfileVo> employees = List.of(
-            createEmployee(101L, "张三", "全职", 1), // 全职咖啡师
-            createEmployee(102L, "李四", "全职", 2), // 全职收银员
-            createEmployee(201L, "王五", "兼职", 10)  // 兼职咖啡师 (仅晚上可用)
+            createEmployee(101L, "张三", "正职", 1),
+            createEmployee(102L, "李四", "正职", 2),
+            createEmployee(201L, "王五", "兼职", 10)
         );
 
-        Map<Long, List<Long>> userSkills = Map.of(101L, List.of(1L), 102L, List.of(2L), 201L, List.of(1L));
+        Map<Long, Map<Long, Long>> userSkills = Map.of(
+            101L, Map.of(1L, 5L),
+            102L, Map.of(2L, 5L),
+            201L, Map.of(1L, 5L)
+        );
 
-        // 兼职王五仅晚上17:00-22:00可用
         Map<Long, List<HrpUserAvailabilityVo>> availabilities = new HashMap<>();
         availabilities.put(101L, List.of(createAvailability(101L, testDate, "00:00", "23:59")));
         availabilities.put(102L, List.of(createAvailability(102L, testDate, "00:00", "23:59")));
         availabilities.put(201L, List.of(createAvailability(201L, testDate, "17:00", "22:00")));
 
-        // 构造多班次需求
         ScheduleGenerateDto dto = new ScheduleGenerateDto();
         dto.setStoreId(storeId);
         dto.setStartDate(testDate);
@@ -196,17 +191,17 @@ class SchedulingAlgorithmServiceTest {
         dto.setEmployees(employees.stream().map(e -> new ScheduleGenerateDto.EmployeeConfig(e.getUserId(), null)).collect(Collectors.toList()));
         Map<String, Map<String, Map<String, Integer>>> requirementsByDay = new HashMap<>();
         Map<String, Map<String, Integer>> dayReq = new HashMap<>();
-        dayReq.put("09:00-17:00", Map.of("咖啡师", 1, "收银员", 1)); // 早班需求
-        dayReq.put("17:00-22:00", Map.of("咖啡师", 2));             // 晚班需求 (需要2名咖啡师)
+        dayReq.put("09:00-17:00", Map.of("咖啡师", 1, "收银员", 1));
+        dayReq.put("17:00-22:00", Map.of("咖啡师", 2));
         requirementsByDay.put(testDate.toString(), dayReq);
         dto.setRequirementsByDay(requirementsByDay);
 
-
         when(userProfileMapper.selectVoByUserIds(anyList())).thenReturn(employees);
-        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkills(userSkills));
+        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkillsWithPriority(userSkills));
         when(userAvailabilityMapper.selectVoListByUserIds(anyList())).thenReturn(flattenAvailabilities(availabilities));
         when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(Collections.emptyList());
         doNothing().when(schedulesMapper).insertBatch(anyList());
+        when(skillsMapper.selectById(1L)).thenReturn(mockSkills.get(0));
 
         // --- Act (执行算法) ---
         ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
@@ -215,20 +210,106 @@ class SchedulingAlgorithmServiceTest {
         assertNotNull(result);
         assertEquals(3, result.getSchedules().size(), "应生成三条排班记录");
 
-        // 验证早班排班
         long morningShiftId = getShiftIdByName("09:00-17:00");
         assertTrue(result.getSchedules().stream().anyMatch(s -> s.getUserId().equals(101L) && s.getShiftId().equals(morningShiftId)), "早班应排全职咖啡师张三");
         assertTrue(result.getSchedules().stream().anyMatch(s -> s.getUserId().equals(102L) && s.getShiftId().equals(morningShiftId)), "早班应排全职收银员李四");
 
-        // 验证晚班排班
         long eveningShiftId = getShiftIdByName("17:00-22:00");
         assertTrue(result.getSchedules().stream().anyMatch(s -> s.getUserId().equals(201L) && s.getShiftId().equals(eveningShiftId)), "晚班应排兼职咖啡师王五");
 
-        // 验证人力缺口报告
         assertEquals(1, result.getFeedbackItems().size(), "应有一条反馈信息");
         FeedbackItem feedback = result.getFeedbackItems().get(0);
         assertEquals(FeedbackItem.FeedbackType.MANPOWER_SHORTAGE, feedback.getType());
         assertTrue(feedback.getMessage().contains("晚班") && feedback.getMessage().contains("咖啡师") && feedback.getMessage().contains("缺少 1 人"));
+    }
+
+    @Test
+    @DisplayName("场景四：新复合优先级 - 正职 vs 全天兼职 vs 技能优先兼职")
+    void testNewPriorityLogic() {
+        // --- Arrange (准备数据) ---
+        LocalDate testDate = LocalDate.now();
+        Long storeId = 1L;
+        Long coffeeSkillId = 1L;
+
+        List<HrpUserProfileVo> employees = List.of(
+            createEmployee(101L, "张三-正职", "正职", 1),
+            createEmployee(201L, "李四-兼职全天低优先级", "兼职", 5),
+            createEmployee(202L, "王五-兼职限时高优先级", "兼职", 5)
+        );
+
+        Map<Long, Map<Long, Long>> userSkills = Map.of(
+            101L, Map.of(coffeeSkillId, 5L),
+            201L, Map.of(coffeeSkillId, 1L),
+            202L, Map.of(coffeeSkillId, 10L)
+        );
+
+        Map<Long, List<HrpUserAvailabilityVo>> availabilities = new HashMap<>();
+        availabilities.put(101L, List.of(createAvailability(101L, testDate, "08:00", "22:00")));
+        availabilities.put(202L, List.of(createAvailability(202L, testDate, "08:00", "18:00")));
+
+        ScheduleGenerateDto dto = createSingleDayDto(storeId, testDate, employees, "09:00-17:00", Map.of("咖啡师", 1));
+
+        when(userProfileMapper.selectVoByUserIds(anyList())).thenReturn(employees);
+        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkillsWithPriority(userSkills));
+        when(userAvailabilityMapper.selectVoListByUserIds(anyList())).thenReturn(flattenAvailabilities(availabilities));
+        when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(Collections.emptyList());
+        doNothing().when(schedulesMapper).insertBatch(anyList());
+
+        // --- Act 1: 所有人都可用 ---
+        ScheduleGenerationResult result1 = schedulingAlgorithmService.generateSchedule(dto);
+
+        // --- Assert 1: 应选择正职员工 ---
+        assertNotNull(result1);
+        assertEquals(1, result1.getSchedules().size());
+        assertEquals(101L, result1.getSchedules().get(0).getUserId(), "第一顺位应选择正职员工张三");
+
+        // --- Arrange 2: 正职员工请假 ---
+        List<HrpLeaveRequestsVo> leaveForFullTimer = List.of(createLeaveRequest(101L, testDate));
+        when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(leaveForFullTimer);
+
+        // --- Act 2: 正职请假后重新排班 ---
+        ScheduleGenerationResult result2 = schedulingAlgorithmService.generateSchedule(dto);
+
+        // --- Assert 2: 应选择全天可用的兼职，即使其技能优先级更低 ---
+        assertNotNull(result2);
+        assertEquals(1, result2.getSchedules().size());
+        assertEquals(201L, result2.getSchedules().get(0).getUserId(), "正职请假后，应选择全天可用的兼职李四，而不是技能优先级更高的王五");
+    }
+
+    @Test
+    @DisplayName("场景五：新复合优先级 - 技能优先级作为主要决胜条件")
+    void testSkillPriorityTieBreaker() {
+        // --- Arrange (准备数据) ---
+        LocalDate testDate = LocalDate.now();
+        Long storeId = 1L;
+        Long coffeeSkillId = 1L;
+
+        List<HrpUserProfileVo> employees = List.of(
+            createEmployee(101L, "张三-正职高优先级", "正职", 1),
+            createEmployee(102L, "李四-正职低优先级", "正职", 1)
+        );
+
+        Map<Long, Map<Long, Long>> userSkills = Map.of(
+            101L, Map.of(coffeeSkillId, 10L),
+            102L, Map.of(coffeeSkillId, 1L)
+        );
+
+        Map<Long, List<HrpUserAvailabilityVo>> availabilities = createFullAvailability(employees, testDate);
+        ScheduleGenerateDto dto = createSingleDayDto(storeId, testDate, employees, "09:00-17:00", Map.of("咖啡师", 1));
+
+        when(userProfileMapper.selectVoByUserIds(anyList())).thenReturn(employees);
+        when(userSkillsMapper.selectVoListByUserIds(anyList())).thenReturn(flattenSkillsWithPriority(userSkills));
+        when(userAvailabilityMapper.selectVoListByUserIds(anyList())).thenReturn(flattenAvailabilities(availabilities));
+        when(leaveRequestsMapper.selectVoListByUsersAndDate(anyList(), any(), any())).thenReturn(Collections.emptyList());
+        doNothing().when(schedulesMapper).insertBatch(anyList());
+
+        // --- Act ---
+        ScheduleGenerationResult result = schedulingAlgorithmService.generateSchedule(dto);
+
+        // --- Assert ---
+        assertNotNull(result);
+        assertEquals(1, result.getSchedules().size());
+        assertEquals(101L, result.getSchedules().get(0).getUserId(), "在其他条件相同时，应选择技能优先级更高的张三");
     }
 
 
@@ -241,8 +322,6 @@ class SchedulingAlgorithmServiceTest {
             new HrpSkills(3L, "外场")
         );
         when(skillsMapper.selectList()).thenReturn(mockSkills);
-        when(skillsMapper.selectById(1L)).thenReturn(mockSkills.get(0));
-        when(skillsMapper.selectById(2L)).thenReturn(mockSkills.get(1));
     }
 
     private void setupMockShifts() {
@@ -257,7 +336,6 @@ class SchedulingAlgorithmServiceTest {
         HrpUserProfileVo employee = new HrpUserProfileVo();
         employee.setUserId(id);
         employee.setUserName(name);
-        // TODO: 这两个是需要你在 HrpUserProfileVo 中添加的字段
         employee.setEmployeeType(type);
         employee.setPriorityScore(Long.valueOf(priority));
         return employee;
@@ -310,13 +388,14 @@ class SchedulingAlgorithmServiceTest {
         return dto;
     }
 
-    private List<HrpUserSkillsVo> flattenSkills(Map<Long, List<Long>> userSkillsMap) {
+    private List<HrpUserSkillsVo> flattenSkillsWithPriority(Map<Long, Map<Long, Long>> userSkillsMap) {
         List<HrpUserSkillsVo> list = new ArrayList<>();
-        userSkillsMap.forEach((userId, skillIds) -> {
-            skillIds.forEach(skillId -> {
+        userSkillsMap.forEach((userId, skillToPriorityMap) -> {
+            skillToPriorityMap.forEach((skillId, priority) -> {
                 HrpUserSkillsVo vo = new HrpUserSkillsVo();
                 vo.setUserId(userId);
                 vo.setSkillId(skillId);
+                vo.setPriority(priority);
                 list.add(vo);
             });
         });

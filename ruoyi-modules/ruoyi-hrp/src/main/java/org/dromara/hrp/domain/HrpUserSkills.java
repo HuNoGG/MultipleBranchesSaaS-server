@@ -37,5 +37,10 @@ public class HrpUserSkills  {
      */
     private Long tenantId;
 
+    /**
+     * 技能优先级 (数字越大, 优先级越高)
+     */
+    private Long priority;
+
 
 }

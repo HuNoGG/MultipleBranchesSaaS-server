@@ -40,5 +40,11 @@ public class HrpUserSkillsVo implements Serializable {
     @ExcelProperty(value = "技能 ID")
     private Long skillId;
 
+    /**
+     * 技能优先级 (数字越大, 优先级越高)
+     */
+    @ExcelProperty(value = "技能优先级")
+    private Long priority;
+
 
 }
