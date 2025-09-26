@@ -16,6 +16,7 @@
         <module>ruoyi-system</module>
         <module>ruoyi-workflow</module>
         <module>ruoyi-hrp</module>
+        <module>ruoyi-wms</module>
     </modules>
 
     <artifactId>ruoyi-modules</artifactId>
